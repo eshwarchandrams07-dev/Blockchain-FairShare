@@ -15,6 +15,7 @@ import ProfileModal from './components/ProfileModal';
 import ConnectDevicesModal from './components/ConnectDevicesModal';
 import NetworkModal from './components/NetworkModal';
 import IpfsModal from './components/IpfsModal';
+import PrivateGroupGate from './components/PrivateGroupGate';
 import Toast from './components/Toast';
 import confetti from 'canvas-confetti';
 import { 
@@ -78,19 +79,20 @@ export default function App() {
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    // Check URL parameters for group invite (e.g. ?joinGroup=1)
+    // Check URL parameters for group invite (e.g. ?joinGroup=1&key=FS-4020)
     try {
       const params = new URLSearchParams(window.location.search);
       const joinGroupId = params.get('joinGroup') || params.get('join');
+      const inviteKey = params.get('key') || params.get('code') || params.get('pvt');
       if (joinGroupId) {
-        const joinedGrp = blockchainService.joinGroup(joinGroupId);
-        if (joinedGrp) {
+        const res = blockchainService.joinGroup(joinGroupId, inviteKey);
+        if (res && res.success) {
           queueMicrotask(() => {
-            addToast('Connected to Group', `Joined "${joinedGrp.name}"!`, 'success');
+            addToast('Private Ledger Unlocked', `Joined "${res.group.name}" with verified passkey!`, 'success');
           });
-        } else {
+        } else if (res && !res.success) {
           queueMicrotask(() => {
-            addToast('Connecting to Group', `Synchronizing Group #${joinGroupId} from host...`, 'info');
+            addToast('Private Ledger Locked', res.error || 'Private passkey required to access this group ledger.', 'error');
           });
         }
       }
@@ -218,9 +220,19 @@ export default function App() {
     addToast('Group Switched', `Active workspace updated to Group #${id}`, 'info');
   };
 
-  const handleCreateGroup = (name, description, policy, creatorName) => {
-    const newGrp = blockchainService.createGroup(name, description, policy, creatorName);
-    addToast('Smart Contract Deployed', `Created group "${newGrp.name}" with on-chain consensus rule`, 'success');
+  const isGroupUnlocked = blockchainService.isGroupUnlocked(currentGroup.id);
+
+  const handleCreateGroup = (name, description, policy, creatorName, customPasskey) => {
+    const newGrp = blockchainService.createGroup(name, description, policy, creatorName, customPasskey);
+    addToast('Smart Contract Deployed', `Created private group "${newGrp.name}" (Passkey: ${newGrp.inviteCode})`, 'success');
+  };
+
+  const handleUnlockGroup = (groupId, passkey) => {
+    const res = blockchainService.joinGroup(groupId, passkey);
+    if (res.success) {
+      addToast('Private Ledger Unlocked', `Access granted to "${res.group.name}"!`, 'success');
+    }
+    return res;
   };
 
   const handleAddMember = (groupId, addr, name, role) => {
@@ -303,6 +315,7 @@ export default function App() {
         onOpenNetworkModal={() => setIsNetworkModalOpen(true)}
         onOpenIpfsModal={() => setIsIpfsModalOpen(true)}
         currentGroup={currentGroup}
+        isGroupUnlocked={isGroupUnlocked}
         onResetShowcase={() => {
           blockchainService.resetToDefaults();
           addToast('Showcase Dataset Reloaded', 'Loaded all 5 members & all combinations of expenses, settlements, and voting', 'success');
@@ -457,17 +470,28 @@ export default function App() {
           </button>
         </div>
 
-        {/* Tab Content Views */}
-        {activeTab === 'overview' && (
-          <DashboardOverview
+        {/* If group is locked to outsiders, display PrivateGroupGate (unless on GroupManagement tab) */}
+        {!isGroupUnlocked && activeTab !== 'group' ? (
+          <PrivateGroupGate
             currentGroup={currentGroup}
-            groupBalances={groupBalances}
-            expenses={expenses}
-            currentAccount={currentAccount}
-            onOpenAddExpense={() => setIsAddExpenseOpen(true)}
-            onSwitchTab={setActiveTab}
+            groups={groups}
+            onUnlock={handleUnlockGroup}
+            onOpenCreateGroup={() => setActiveTab('group')}
+            onSelectGroup={handleSelectGroup}
           />
-        )}
+        ) : (
+          <>
+            {/* Tab Content Views */}
+            {activeTab === 'overview' && (
+              <DashboardOverview
+                currentGroup={currentGroup}
+                groupBalances={groupBalances}
+                expenses={expenses}
+                currentAccount={currentAccount}
+                onOpenAddExpense={() => setIsAddExpenseOpen(true)}
+                onSwitchTab={setActiveTab}
+              />
+            )}
 
         {activeTab === 'expenses' && (
           <ExpenseList
@@ -521,16 +545,18 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'group' && (
-          <GroupManagement
-            groups={groups}
-            currentGroup={currentGroup}
-            onSelectGroup={handleSelectGroup}
-            onCreateGroup={handleCreateGroup}
-            onAddMember={handleAddMember}
-            currentAccount={currentAccount}
-            groupBalances={groupBalances}
-          />
+            {activeTab === 'group' && (
+              <GroupManagement
+                groups={groups}
+                currentGroup={currentGroup}
+                onSelectGroup={handleSelectGroup}
+                onCreateGroup={handleCreateGroup}
+                onAddMember={handleAddMember}
+                currentAccount={currentAccount}
+                groupBalances={groupBalances}
+              />
+            )}
+          </>
         )}
       </main>
 
@@ -677,6 +703,7 @@ export default function App() {
         onClose={() => setIsConnectDevicesModalOpen(false)}
         groupId={currentGroup.id}
         groupName={currentGroup.name}
+        inviteCode={currentGroup.inviteCode}
         activePersona={activePersona}
       />
 

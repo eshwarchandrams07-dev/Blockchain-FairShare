@@ -26,6 +26,7 @@ export default function Navbar({
   onOpenNetworkModal,
   onOpenIpfsModal,
   currentGroup,
+  isGroupUnlocked = true,
   onSwitchAccount,
   onResetShowcase,
 }) {
@@ -149,8 +150,8 @@ export default function Navbar({
             <span>Faucet (+₹500 FSINR)</span>
           </button>
 
-          {/* Quick Persona Switcher for Testing All Multi-Party Perspectives */}
-          {currentGroup?.members && currentGroup.members.length > 1 && (
+          {/* Quick Persona Switcher for Testing All Multi-Party Perspectives (Visible only when unlocked) */}
+          {isGroupUnlocked && currentGroup?.members && currentGroup.members.length > 1 && (
             <div 
               className="persona-switcher" 
               title="Click any member to switch your active perspective & test their voting, PIN, and balance"
@@ -171,6 +172,12 @@ export default function Navbar({
                 );
               })}
             </div>
+          )}
+
+          {!isGroupUnlocked && (
+            <span className="badge badge-pending" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              🔒 Private Block
+            </span>
           )}
 
           {/* Reset Demo Showcase button */}

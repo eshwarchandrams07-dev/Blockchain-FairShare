@@ -14,9 +14,11 @@ export default function ConnectDevicesModal({
   isOpen,
   onClose,
   groupId = 1,
+  inviteCode = 'FS-4020',
   activePersona
 }) {
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [showIpEdit, setShowIpEdit] = useState(false);
 
   // Compute origin and mobile URL
@@ -29,13 +31,19 @@ export default function ConnectDevicesModal({
   const port = typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : ':5173';
   const effectiveHost = isLocalhost ? `${lanIp}${port}` : (typeof window !== 'undefined' ? window.location.host : '172.20.161.113:5173');
   const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-  const mobileJoinUrl = `${protocol}//${effectiveHost}/?joinGroup=${groupId}`;
+  const mobileJoinUrl = `${protocol}//${effectiveHost}/?joinGroup=${groupId}&key=${encodeURIComponent(inviteCode)}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(mobileJoinUrl)}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(mobileJoinUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(inviteCode);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2500);
   };
 
   return (
@@ -207,11 +215,67 @@ export default function ConnectDevicesModal({
           )}
         </div>
 
+        {/* Outsider Shield & Private Passkey Card */}
+        <div
+          style={{
+            background: 'rgba(99, 102, 241, 0.07)',
+            border: '1px solid rgba(99, 102, 241, 0.25)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary-light)' }}>
+                🛡️ Outsider Barrier Active
+              </span>
+              <span className="badge badge-pending" style={{ fontSize: '10px' }}>
+                Private Group
+              </span>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Outsiders cannot enter without this QR code or secret passkey:
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span 
+              className="mono"
+              style={{
+                fontSize: '15px',
+                fontWeight: 900,
+                letterSpacing: '1px',
+                background: 'var(--bg-card)',
+                color: 'var(--color-primary-light)',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: '1px dashed var(--color-primary)'
+              }}
+            >
+              {inviteCode}
+            </span>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={handleCopyCode}
+              title="Copy Private Passkey"
+              style={{ height: '32px' }}
+            >
+              {copiedCode ? <Check size={14} /> : <Copy size={14} />}
+              <span>{copiedCode ? 'Copied' : 'Copy'}</span>
+            </button>
+          </div>
+        </div>
+
         {/* 1-Click Group Invite Link Box */}
         <div style={{ marginBottom: '18px' }}>
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Sparkles size={14} style={{ color: 'var(--color-primary-light)' }} />
-            <span>Or Copy Direct Link for Group #{groupId}</span>
+            <span>Or Copy Direct Link with Embedded Key (Group #{groupId})</span>
           </label>
           <div style={{ display: 'flex', gap: '8px' }}>
             <input 

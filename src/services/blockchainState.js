@@ -133,6 +133,9 @@ class BlockchainStateService {
     this.listeners = new Set();
     this.deployments = deploymentsData;
 
+    this.unlockedGroupIdsKey = 'fairshare_unlocked_groups_v2';
+    this.unlockedGroupIds = this.loadUnlockedGroups();
+
     try {
       this.networkMode = localStorage.getItem('fairshare_network_mode') || 'sandbox';
     } catch {
@@ -249,6 +252,16 @@ class BlockchainStateService {
         this.currentGroupId = parsed.currentGroupId || 1;
         this.currentBlockNumber = parsed.currentBlockNumber || 19843600;
 
+        // Ensure all groups have a private inviteCode
+        this.groups.forEach(g => {
+          if (!g.inviteCode) {
+            if (g.id === 1) g.inviteCode = 'FS-4020';
+            else if (g.id === 2) g.inviteCode = 'GOA-7788';
+            else if (g.id === 3) g.inviteCode = 'DAO-9900';
+            else g.inviteCode = `FS-${1000 + g.id * 111}`;
+          }
+        });
+
         // If existing state has 0 expenses or fewer than 2 members in group 1, seed the rich showcase dataset
         if (this.expenses.length === 0 || this.groups.length === 0 || (this.groups[0]?.members?.length || 0) <= 1) {
           this.resetToDefaults();
@@ -265,19 +278,38 @@ class BlockchainStateService {
     }
   }
 
+  loadUnlockedGroups() {
+    try {
+      const stored = localStorage.getItem(this.unlockedGroupIdsKey);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch {}
+    // Host starts with group 1 unlocked
+    return [1];
+  }
+
+  saveUnlockedGroups() {
+    try {
+      localStorage.setItem(this.unlockedGroupIdsKey, JSON.stringify(this.unlockedGroupIds));
+    } catch {}
+  }
+
   ensureProfileInActiveGroup() {
     if (this.groups && this.groups.length > 0) {
       const activeGroup = this.getCurrentGroup();
-      if (activeGroup && !activeGroup.members.some(m => m.address.toLowerCase() === this.myProfile.address.toLowerCase())) {
-        activeGroup.members.push({
-          address: this.myProfile.address,
-          name: this.myProfile.name,
-          role: activeGroup.members.length === 0 ? 'ADMIN' : 'MEMBER',
-          avatar: this.myProfile.avatar,
-          pin: this.myProfile.pin,
-          upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-          joinedAt: Date.now(),
-        });
+      if (activeGroup && this.isGroupUnlocked(activeGroup.id)) {
+        if (!activeGroup.members.some(m => m.address.toLowerCase() === this.myProfile.address.toLowerCase())) {
+          activeGroup.members.push({
+            address: this.myProfile.address,
+            name: this.myProfile.name,
+            role: activeGroup.members.length === 0 ? 'ADMIN' : 'MEMBER',
+            avatar: this.myProfile.avatar,
+            pin: this.myProfile.pin,
+            upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
+            joinedAt: Date.now(),
+          });
+        }
       }
     }
   }
@@ -382,6 +414,7 @@ class BlockchainStateService {
         creator: m1.address,
         approvalPolicy: APPROVAL_POLICIES.MAJORITY_VOTE, // 1
         createdAt: Date.now() - 86400000 * 7,
+        inviteCode: 'FS-4020',
         members: [m1, m2, m3, m4, m5],
       },
       {
@@ -391,6 +424,7 @@ class BlockchainStateService {
         creator: m1.address,
         approvalPolicy: APPROVAL_POLICIES.AUTO_APPROVE, // 0
         createdAt: Date.now() - 86400000 * 3,
+        inviteCode: 'GOA-7788',
         members: [m1, m2, m3, m4],
       },
       {
@@ -400,6 +434,7 @@ class BlockchainStateService {
         creator: m1.address,
         approvalPolicy: APPROVAL_POLICIES.UNANIMOUS_VOTE, // 2
         createdAt: Date.now() - 86400000 * 2,
+        inviteCode: 'DAO-9900',
         members: [m1, m2, m3],
       },
     ];
@@ -1107,9 +1142,42 @@ class BlockchainStateService {
     this.saveState();
   }
 
-  createGroup(name, description, approvalPolicy, creatorName) {
+  isGroupUnlocked(groupId) {
+    const numericId = Number(groupId);
+    const grp = this.groups.find(g => Number(g.id) === numericId);
+    if (!grp) return false;
+
+    // Creator always has access
+    if (grp.creator && grp.creator.toLowerCase() === this.currentAccount.toLowerCase()) {
+      return true;
+    }
+
+    return this.unlockedGroupIds.includes(numericId);
+  }
+
+  unlockGroup(groupId) {
+    const numericId = Number(groupId);
+    if (!this.unlockedGroupIds.includes(numericId)) {
+      this.unlockedGroupIds.push(numericId);
+      this.saveUnlockedGroups();
+      this.notifyListeners();
+    }
+  }
+
+  lockGroup(groupId) {
+    const numericId = Number(groupId);
+    this.unlockedGroupIds = this.unlockedGroupIds.filter(id => id !== numericId);
+    this.saveUnlockedGroups();
+    this.notifyListeners();
+  }
+
+  createGroup(name, description, approvalPolicy, creatorName, customCode) {
     const newId = this.groups.length > 0 ? Math.max(...this.groups.map(g => g.id)) + 1 : 1;
     const profile = this.getMyProfile();
+    const inviteCode = (customCode && customCode.trim())
+      ? customCode.trim().toUpperCase()
+      : `FS-${Math.floor(1000 + Math.random() * 9000)}`;
+
     const newGroup = {
       id: newId,
       name,
@@ -1117,6 +1185,7 @@ class BlockchainStateService {
       creator: this.currentAccount,
       approvalPolicy: Number(approvalPolicy),
       createdAt: Date.now(),
+      inviteCode,
       members: [
         {
           address: this.currentAccount,
@@ -1131,34 +1200,91 @@ class BlockchainStateService {
 
     this.groups.push(newGroup);
     this.currentGroupId = newId;
+    this.unlockGroup(newId);
 
     this.addAuditLog(
       newId,
       'GROUP_DEPLOYED',
       this.currentAccount,
       creatorName || profile.name,
-      `Created and deployed group "${name}" with ${POLICY_LABELS[approvalPolicy]}`
+      `Created and deployed group "${name}" with ${POLICY_LABELS[approvalPolicy]} (Private Code: ${inviteCode})`
     );
 
     this.saveState();
     return newGroup;
   }
 
-  joinGroup(groupId) {
+  regenerateInviteCode(groupId) {
+    const grp = this.groups.find(g => Number(g.id) === Number(groupId));
+    if (!grp) return null;
+    const newCode = `FS-${Math.floor(1000 + Math.random() * 9000)}`;
+    grp.inviteCode = newCode;
+    this.saveState();
+    return newCode;
+  }
+
+  joinGroup(groupId, inviteKey = null) {
     const numericId = Number(groupId);
     const grp = this.groups.find(g => Number(g.id) === numericId);
     if (!grp) {
       // Group not yet loaded in local state; request sync from peers
       this.pendingJoinGroupId = numericId;
+      this.pendingJoinKey = inviteKey;
       liveSync.broadcast({
         type: 'REQUEST_SYNC',
         targetGroupId: numericId,
       });
-      return null;
+      return { success: false, pending: true, message: 'Syncing ledger from peer host...' };
     }
 
     this.pendingJoinGroupId = null;
 
+    // Check if group is already unlocked for this user/device
+    const alreadyUnlocked = this.isGroupUnlocked(numericId);
+
+    if (alreadyUnlocked) {
+      this.ensureMemberInGroup(grp);
+      this.currentGroupId = numericId;
+      this.saveState();
+      return { success: true, group: grp };
+    }
+
+    // If a private invite key is provided (e.g. from QR code scan or user input)
+    if (inviteKey) {
+      const expected = (grp.inviteCode || '').trim().toUpperCase();
+      const provided = inviteKey.trim().toUpperCase();
+
+      if (expected && provided === expected) {
+        this.unlockGroup(numericId);
+        this.ensureMemberInGroup(grp);
+        this.currentGroupId = numericId;
+
+        this.addAuditLog(
+          Number(groupId),
+          'MEMBER_JOINED',
+          this.myProfile.address,
+          this.myProfile.name,
+          `${this.myProfile.name} verified with Private QR/Passkey and joined the group roster.`
+        );
+
+        this.saveState();
+        return { success: true, group: grp };
+      } else {
+        return {
+          success: false,
+          error: `Incorrect Private Passkey "${inviteKey}". Outsiders cannot access this ledger.`
+        };
+      }
+    }
+
+    // No key provided and not unlocked
+    return {
+      success: false,
+      error: 'This group is private. Please scan the group QR code or enter the private passkey.'
+    };
+  }
+
+  ensureMemberInGroup(grp) {
     if (!grp.members.some(m => m.address.toLowerCase() === this.myProfile.address.toLowerCase())) {
       const newMember = {
         address: this.myProfile.address,
@@ -1173,24 +1299,10 @@ class BlockchainStateService {
 
       liveSync.broadcast({
         type: 'MEMBER_JOINED',
-        groupId: Number(groupId),
+        groupId: Number(grp.id),
         member: newMember,
       });
-
-      this.addAuditLog(
-        Number(groupId),
-        'MEMBER_JOINED',
-        this.myProfile.address,
-        this.myProfile.name,
-        `${this.myProfile.name} connected their device and joined the group roster.`
-      );
-
-      this.saveState();
     }
-
-    this.currentGroupId = Number(groupId);
-    this.saveState();
-    return grp;
   }
 
   addMemberToGroup(groupId, memberAddress, memberName, role = 'MEMBER') {

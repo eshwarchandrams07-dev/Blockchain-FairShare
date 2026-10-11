@@ -31,6 +31,7 @@ export default function GroupManagement({
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [newGroupPolicy, setNewGroupPolicy] = useState(APPROVAL_POLICIES.MAJORITY_VOTE);
   const [creatorName, setCreatorName] = useState('');
+  const [customPasskey, setCustomPasskey] = useState('');
 
   // Add Member Form State
   const [memberAddress, setMemberAddress] = useState('');
@@ -52,7 +53,8 @@ export default function GroupManagement({
     const port = typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : ':5173';
     const host = isLocal ? `172.20.161.113${port}` : (typeof window !== 'undefined' ? window.location.host : '172.20.161.113:5173');
     const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-    const inviteUrl = `${protocol}//${host}?joinGroup=${currentGroup.id}`;
+    const keyParam = currentGroup.inviteCode ? `&key=${encodeURIComponent(currentGroup.inviteCode)}` : '';
+    const inviteUrl = `${protocol}//${host}?joinGroup=${currentGroup.id}${keyParam}`;
     navigator.clipboard.writeText(inviteUrl);
     setCopiedInvite(true);
     setTimeout(() => setCopiedInvite(false), 2500);
@@ -67,10 +69,11 @@ export default function GroupManagement({
     }
 
     try {
-      onCreateGroup(newGroupName.trim(), newGroupDesc.trim(), Number(newGroupPolicy), creatorName.trim());
+      onCreateGroup(newGroupName.trim(), newGroupDesc.trim(), Number(newGroupPolicy), creatorName.trim(), customPasskey.trim());
       setIsCreateModalOpen(false);
       setNewGroupName('');
       setNewGroupDesc('');
+      setCustomPasskey('');
     } catch (err) {
       setFormError(err.message || 'Failed to create group');
     }
@@ -180,6 +183,22 @@ export default function GroupManagement({
             </div>
             <div>
               <strong>Membership:</strong> {currentGroup.members.length} verified accounts
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div>
+                <strong>Private Passkey:</strong>{' '}
+                <span className="mono" style={{ color: 'var(--color-primary-light)', fontWeight: 800, letterSpacing: '1px' }}>
+                  {currentGroup.inviteCode || 'FS-4020'}
+                </span>
+              </div>
+              <button 
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => handleCopy(currentGroup.inviteCode || 'FS-4020')}
+                style={{ fontSize: '11px', height: '24px', padding: '0 8px' }}
+              >
+                {copiedAddress === (currentGroup.inviteCode || 'FS-4020') ? 'Copied' : 'Copy Key'}
+              </button>
             </div>
           </div>
         </div>
@@ -355,6 +374,21 @@ export default function GroupManagement({
                   placeholder="e.g. Alice"
                   value={creatorName}
                   onChange={e => setCreatorName(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Custom Private Passkey (Optional)</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Auto-generated if empty</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-input mono"
+                  placeholder="e.g. FS-9842"
+                  value={customPasskey}
+                  onChange={e => setCustomPasskey(e.target.value.toUpperCase())}
+                  style={{ textTransform: 'uppercase' }}
                 />
               </div>
 
