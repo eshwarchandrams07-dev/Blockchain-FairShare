@@ -1,0 +1,16 @@
+{
+  "network": "base-sepolia",
+  "networkName": "Base Sepolia (Testnet)",
+  "chainId": 84532,
+  "deployedAt": null,
+  "contracts": {
+    "FairShare": {
+      "address": "0x0000000000000000000000000000000000000000",
+      "explorerUrl": "https://sepolia.basescan.org"
+    },
+    "MockERC20": {
+      "address": "0x0000000000000000000000000000000000000000",
+      "explorerUrl": "https://sepolia.basescan.org"
+    }
+  }
+}
