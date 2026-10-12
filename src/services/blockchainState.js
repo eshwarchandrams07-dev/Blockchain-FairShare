@@ -187,8 +187,9 @@ class BlockchainStateService {
         if (this.pendingJoinGroupId) {
           const targetGrp = this.groups.find(g => Number(g.id) === Number(this.pendingJoinGroupId));
           if (targetGrp) {
-            this.joinGroup(this.pendingJoinGroupId);
+            this.joinGroup(this.pendingJoinGroupId, this.pendingJoinKey);
             this.pendingJoinGroupId = null;
+            this.pendingJoinKey = null;
           }
         }
         this.saveState(true);
@@ -346,6 +347,9 @@ class BlockchainStateService {
     p.pin = p.pin || '1234';
     p.upiId = p.upiId || 'eshwar@okhdfcbank';
     p.tokenBalance = 75000; // ₹750.00 FSINR
+
+    this.unlockedGroupIds = [1];
+    this.saveUnlockedGroups();
 
     try {
       localStorage.setItem('fairshare_device_profile_v2', JSON.stringify(p));
@@ -1147,11 +1151,6 @@ class BlockchainStateService {
     const grp = this.groups.find(g => Number(g.id) === numericId);
     if (!grp) return false;
 
-    // Creator always has access
-    if (grp.creator && grp.creator.toLowerCase() === this.currentAccount.toLowerCase()) {
-      return true;
-    }
-
     return this.unlockedGroupIds.includes(numericId);
   }
 
@@ -1193,6 +1192,8 @@ class BlockchainStateService {
           role: 'ADMIN',
           avatar: profile.avatar,
           pin: profile.pin,
+          upiId: profile.upiId || `${(creatorName || profile.name).toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
+          tokenBalance: profile.tokenBalance ?? 75000,
           joinedAt: Date.now(),
         },
       ],
@@ -1253,11 +1254,15 @@ class BlockchainStateService {
     if (inviteKey) {
       const expected = (grp.inviteCode || '').trim().toUpperCase();
       const provided = inviteKey.trim().toUpperCase();
+      const cleanExpected = expected.replace(/[^A-Z0-9]/g, '');
+      const cleanProvided = provided.replace(/[^A-Z0-9]/g, '');
 
-      if (expected && provided === expected) {
+      if (expected && (provided === expected || cleanProvided === cleanExpected)) {
         this.unlockGroup(numericId);
         this.ensureMemberInGroup(grp);
         this.currentGroupId = numericId;
+        this.pendingJoinGroupId = null;
+        this.pendingJoinKey = null;
 
         this.addAuditLog(
           Number(groupId),
@@ -1293,6 +1298,7 @@ class BlockchainStateService {
         avatar: this.myProfile.avatar,
         pin: this.myProfile.pin,
         upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
+        tokenBalance: this.myProfile.tokenBalance ?? 50000,
         joinedAt: Date.now(),
       };
       grp.members.push(newMember);
@@ -1320,6 +1326,7 @@ class BlockchainStateService {
       avatar: '👤',
       pin: '1234',
       upiId: `${memberName.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
+      tokenBalance: 50000,
       joinedAt: Date.now(),
     };
 

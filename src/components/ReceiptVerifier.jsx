@@ -70,6 +70,18 @@ export default function ReceiptVerifier({ expenses, currentGroup }) {
     verifyAgainstExpenses(exp.receiptHash);
   };
 
+  const testTamperedExpense = (exp) => {
+    // Deliberately flip the last hex character of the SHA-256 digest to simulate 1-byte alteration
+    const originalHash = exp.receiptHash || '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+    const lastChar = originalHash.slice(-1);
+    const flippedChar = lastChar === 'a' ? 'b' : lastChar === '0' ? '1' : 'f';
+    const tamperedHash = originalHash.slice(0, -1) + flippedChar;
+
+    setFile({ name: `[ALTERED-1-BYTE]_${exp.receiptFileName || 'receipt.pdf'}`, size: 104858 });
+    setComputedHash(tamperedHash);
+    verifyAgainstExpenses(tamperedHash);
+  };
+
   return (
     <div>
       {/* Header Banner */}
@@ -258,8 +270,17 @@ export default function ReceiptVerifier({ expenses, currentGroup }) {
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => testWithExpenseHash(exp)}
+                      title="Verify authentic original hash matches on-chain state"
                     >
-                      Test Hash
+                      Verify
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => testTamperedExpense(exp)}
+                      style={{ color: 'var(--color-rose)', borderColor: 'rgba(244, 63, 94, 0.4)' }}
+                      title="Simulate 1-byte alteration to prove cryptographic tamper resistance"
+                    >
+                      🧪 Alter 1-Byte
                     </button>
                   </div>
                 </div>

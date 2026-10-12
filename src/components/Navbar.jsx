@@ -8,7 +8,9 @@ import {
   Smartphone,
   HardDrive,
   Globe,
-  RotateCcw
+  RotateCcw,
+  Cpu,
+  Lock
 } from 'lucide-react';
 import { shortenAddress, formatCents } from '../utils/cryptoUtils';
 import { blockchainService } from '../services/blockchainState';
@@ -25,8 +27,10 @@ export default function Navbar({
   onOpenConnectDevicesModal,
   onOpenNetworkModal,
   onOpenIpfsModal,
+  onOpenArchitectureModal,
   currentGroup,
   isGroupUnlocked = true,
+  onLockGroup,
   onSwitchAccount,
   onResetShowcase,
 }) {
@@ -140,6 +144,27 @@ export default function Navbar({
             <span>Connect Devices</span>
           </button>
 
+          {/* Architecture & Specs Button */}
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onOpenArchitectureModal}
+            title="View 4-Tier Web3 Architecture, Invariants, and Gas Benchmarks"
+            id="architecture-specs-btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              border: '1px solid var(--border-medium)',
+              background: 'rgba(99, 102, 241, 0.1)',
+              color: 'var(--text-main)',
+              fontWeight: 700,
+            }}
+          >
+            <Cpu size={14} style={{ color: 'var(--color-primary-light)' }} />
+            <span>Architecture & Specs</span>
+          </button>
+
           {/* Testnet Token Faucet */}
           <button 
             className="btn btn-secondary btn-sm"
@@ -150,8 +175,8 @@ export default function Navbar({
             <span>Faucet (+₹500 FSINR)</span>
           </button>
 
-          {/* Quick Persona Switcher for Testing All Multi-Party Perspectives (Visible only when unlocked) */}
-          {isGroupUnlocked && currentGroup?.members && currentGroup.members.length > 1 && (
+          {/* Quick Persona Switcher for Testing Multi-Party Perspectives */}
+          {currentGroup?.members && currentGroup.members.length > 1 && (
             <div 
               className="persona-switcher" 
               title="Click any member to switch your active perspective & test their voting, PIN, and balance"
@@ -174,9 +199,22 @@ export default function Navbar({
             </div>
           )}
 
-          {!isGroupUnlocked && (
+          {/* Lock / Unlock Toggle Button */}
+          {isGroupUnlocked ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => onLockGroup && onLockGroup(currentGroup?.id)}
+              title="Lock this private ledger session with passkey protection"
+              style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
+            >
+              <Lock size={13} style={{ color: 'var(--color-amber)' }} />
+              <span>Lock Ledger</span>
+            </button>
+          ) : (
             <span className="badge badge-pending" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              🔒 Private Block
+              <Lock size={12} />
+              <span>Ledger Locked</span>
             </span>
           )}
 

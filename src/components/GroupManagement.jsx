@@ -10,7 +10,8 @@ import {
   Crown,
   QrCode,
   Share2,
-  Sparkles
+  Sparkles,
+  Lock
 } from 'lucide-react';
 import { shortenAddress, formatCents } from '../utils/cryptoUtils';
 import { APPROVAL_POLICIES, POLICY_LABELS } from '../services/blockchainState';
@@ -21,6 +22,7 @@ export default function GroupManagement({
   onSelectGroup,
   onCreateGroup,
   onAddMember,
+  onLockGroup,
   currentAccount,
   groupBalances,
 }) {
@@ -172,6 +174,19 @@ export default function GroupManagement({
               <span>{copiedInvite ? 'Invite Link Copied!' : 'Copy Invite Link'}</span>
             </button>
 
+            {onLockGroup && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => onLockGroup(currentGroup.id)}
+                title="Lock this private ledger session with passkey protection"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Lock size={16} style={{ color: 'var(--color-amber)' }} />
+                <span>Lock Ledger</span>
+              </button>
+            )}
+
             <button 
               className="btn btn-primary"
               onClick={() => setIsCreateModalOpen(true)}
@@ -248,6 +263,18 @@ export default function GroupManagement({
                 >
                   {copiedAddress === (currentGroup.inviteCode || 'FS-4020') ? 'Copied' : 'Copy Key'}
                 </button>
+                {onLockGroup && (
+                  <button 
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => onLockGroup(currentGroup.id)}
+                    style={{ fontSize: '11px', height: '24px', padding: '0 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    title="Lock this private ledger session with passkey protection"
+                  >
+                    <Lock size={12} style={{ color: 'var(--color-amber)' }} />
+                    <span>Lock</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

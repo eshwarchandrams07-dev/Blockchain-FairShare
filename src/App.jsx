@@ -15,6 +15,7 @@ import ProfileModal from './components/ProfileModal';
 import ConnectDevicesModal from './components/ConnectDevicesModal';
 import NetworkModal from './components/NetworkModal';
 import IpfsModal from './components/IpfsModal';
+import ArchitectureModal from './components/ArchitectureModal';
 import PrivateGroupGate from './components/PrivateGroupGate';
 import Toast from './components/Toast';
 import confetti from 'canvas-confetti';
@@ -61,6 +62,7 @@ export default function App() {
   const [isConnectDevicesModalOpen, setIsConnectDevicesModalOpen] = useState(false);
   const [isNetworkModalOpen, setIsNetworkModalOpen] = useState(false);
   const [isIpfsModalOpen, setIsIpfsModalOpen] = useState(false);
+  const [isArchitectureModalOpen, setIsArchitectureModalOpen] = useState(false);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [disputeModalData, setDisputeModalData] = useState(null); // { expense, isResolving }
   const [correctionModalExpense, setCorrectionModalExpense] = useState(null);
@@ -82,13 +84,17 @@ export default function App() {
     // Check URL parameters for group invite (e.g. ?joinGroup=1&key=FS-4020)
     try {
       const params = new URLSearchParams(window.location.search);
-      const joinGroupId = params.get('joinGroup') || params.get('join');
-      const inviteKey = params.get('key') || params.get('code') || params.get('pvt');
+      const joinGroupId = params.get('joinGroup') || params.get('join') || params.get('groupId');
+      const inviteKey = params.get('key') || params.get('code') || params.get('pvt') || params.get('passkey');
       if (joinGroupId) {
         const res = blockchainService.joinGroup(joinGroupId, inviteKey);
         if (res && res.success) {
           queueMicrotask(() => {
             addToast('Private Ledger Unlocked', `Joined "${res.group.name}" with verified passkey!`, 'success');
+          });
+        } else if (res && res.pending) {
+          queueMicrotask(() => {
+            addToast('Synchronizing Ledger', res.message || 'Connecting to host to sync private ledger...', 'info');
           });
         } else if (res && !res.success) {
           queueMicrotask(() => {
@@ -235,6 +241,11 @@ export default function App() {
     return res;
   };
 
+  const handleLockGroup = (groupId) => {
+    blockchainService.lockGroup(groupId);
+    addToast('Private Ledger Locked', 'Secured ledger with passkey gate. Outsiders blocked.', 'info');
+  };
+
   const handleAddMember = (groupId, addr, name, role) => {
     blockchainService.addMemberToGroup(groupId, addr, name, role);
     addToast('Member Registered', `Added ${name} to group roster on-chain`, 'success');
@@ -314,8 +325,10 @@ export default function App() {
         onOpenConnectDevicesModal={() => setIsConnectDevicesModalOpen(true)}
         onOpenNetworkModal={() => setIsNetworkModalOpen(true)}
         onOpenIpfsModal={() => setIsIpfsModalOpen(true)}
+        onOpenArchitectureModal={() => setIsArchitectureModalOpen(true)}
         currentGroup={currentGroup}
         isGroupUnlocked={isGroupUnlocked}
+        onLockGroup={handleLockGroup}
         onResetShowcase={() => {
           blockchainService.resetToDefaults();
           addToast('Showcase Dataset Reloaded', 'Loaded all 5 members & all combinations of expenses, settlements, and voting', 'success');
@@ -470,13 +483,14 @@ export default function App() {
           </button>
         </div>
 
-        {/* If group is locked to outsiders, display PrivateGroupGate (unless on GroupManagement tab) */}
-        {!isGroupUnlocked && activeTab !== 'group' ? (
+        {/* If group is locked to outsiders, display PrivateGroupGate across all views */}
+        {!isGroupUnlocked ? (
           <PrivateGroupGate
+            key={currentGroup?.id}
             currentGroup={currentGroup}
             groups={groups}
             onUnlock={handleUnlockGroup}
-            onOpenCreateGroup={() => setActiveTab('group')}
+            onCreateGroup={handleCreateGroup}
             onSelectGroup={handleSelectGroup}
           />
         ) : (
@@ -553,6 +567,7 @@ export default function App() {
                 onSelectGroup={handleSelectGroup}
                 onCreateGroup={handleCreateGroup}
                 onAddMember={handleAddMember}
+                onLockGroup={handleLockGroup}
                 currentAccount={currentAccount}
                 groupBalances={groupBalances}
               />
@@ -728,6 +743,12 @@ export default function App() {
         onConfigSaved={() => {
           addToast('IPFS Config Saved', 'Pinata API JWT and Gateway preferences updated', 'success');
         }}
+      />
+
+      {/* 4-Tier Architecture & System Specs Modal */}
+      <ArchitectureModal
+        isOpen={isArchitectureModalOpen}
+        onClose={() => setIsArchitectureModalOpen(false)}
       />
 
       {/* Toast Notifications Container */}
