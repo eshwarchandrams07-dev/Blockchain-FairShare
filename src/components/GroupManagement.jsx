@@ -11,7 +11,12 @@ import {
   QrCode,
   Share2,
   Sparkles,
-  Lock
+  Lock,
+  Globe,
+  KeyRound,
+  Hash,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { shortenAddress, formatCents } from '../utils/cryptoUtils';
 import { APPROVAL_POLICIES, POLICY_LABELS } from '../services/blockchainState';
@@ -32,13 +37,18 @@ export default function GroupManagement({
   const [copiedAddress, setCopiedAddress] = useState(null);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [copiedKeyInModal, setCopiedKeyInModal] = useState(false);
+  const [copiedIdInModal, setCopiedIdInModal] = useState(false);
+  const [showDetailPassword, setShowDetailPassword] = useState(false);
+  const [showModalPassword, setShowModalPassword] = useState(false);
 
   // New Group Form State
+  const [isPrivateChoice, setIsPrivateChoice] = useState(true);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [newGroupPolicy, setNewGroupPolicy] = useState(APPROVAL_POLICIES.MAJORITY_VOTE);
   const [creatorName, setCreatorName] = useState('');
-  const [customPasskey, setCustomPasskey] = useState('');
+  const [customLedgerId, setCustomLedgerId] = useState('');
+  const [customPassword, setCustomPassword] = useState('');
 
   // Add Member Form State
   const [memberAddress, setMemberAddress] = useState('');
@@ -49,14 +59,21 @@ export default function GroupManagement({
   const currentMember = (currentGroup.members || []).find(m => m.address.toLowerCase() === currentAccount.toLowerCase());
   const isAdmin = currentMember?.role === 'ADMIN' || (currentGroup.members || []).length <= 1;
 
+  const isGroupPrivate = currentGroup.isPrivate !== false;
+  const currentLedgerId = currentGroup.ledgerId || (currentGroup.id === 1 ? 'APT-402' : `GRP-${currentGroup.id}`);
+  const currentPassword = currentGroup.password || currentGroup.inviteCode || 'FS-4020';
+
   // Invite URL and QR computation (dynamic for local or deployed Vercel domain)
   const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
   const isLocal = currentHost === 'localhost' || currentHost === '127.0.0.1';
   const port = typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : ':5173';
   const effectiveHost = isLocal ? `172.20.161.113${port}` : (typeof window !== 'undefined' ? window.location.host : '172.20.161.113:5173');
   const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-  const keyParam = currentGroup.inviteCode ? `&key=${encodeURIComponent(currentGroup.inviteCode)}` : '';
-  const inviteUrl = `${protocol}//${effectiveHost}/?joinGroup=${currentGroup.id}${keyParam}`;
+
+  const inviteUrl = isGroupPrivate
+    ? `${protocol}//${effectiveHost}/?joinGroup=${currentGroup.id}&ledgerId=${encodeURIComponent(currentLedgerId)}&key=${encodeURIComponent(currentPassword)}`
+    : `${protocol}//${effectiveHost}/?joinGroup=${currentGroup.id}`;
+
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data=${encodeURIComponent(inviteUrl)}`;
 
   const handleCopy = (addr) => {
@@ -76,7 +93,7 @@ export default function GroupManagement({
       try {
         await navigator.share({
           title: `Join ${currentGroup.name} Ledger`,
-          text: `Join our decentralized expense group "${currentGroup.name}". Passkey: ${currentGroup.inviteCode || 'FS-4020'}`,
+          text: `Join our decentralized expense group "${currentGroup.name}". ID: ${currentLedgerId}${isGroupPrivate ? `, Password: ${currentPassword}` : ' (Public Audit)'}`,
           url: inviteUrl,
         });
       } catch (err) {
@@ -98,11 +115,20 @@ export default function GroupManagement({
     }
 
     try {
-      onCreateGroup(newGroupName.trim(), newGroupDesc.trim(), Number(newGroupPolicy), creatorName.trim(), customPasskey.trim());
+      onCreateGroup(
+        newGroupName.trim(),
+        newGroupDesc.trim(),
+        Number(newGroupPolicy),
+        creatorName.trim(),
+        isPrivateChoice,
+        customLedgerId.trim(),
+        customPassword.trim()
+      );
       setIsCreateModalOpen(false);
       setNewGroupName('');
       setNewGroupDesc('');
-      setCustomPasskey('');
+      setCustomLedgerId('');
+      setCustomPassword('');
     } catch (err) {
       setFormError(err.message || 'Failed to create group');
     }
@@ -213,9 +239,14 @@ export default function GroupManagement({
         {/* Info Card */}
         <div className="glass-panel" style={{ padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span className="badge badge-neutral mono" style={{ fontSize: '11px' }}>
-              Group ID #{currentGroup.id}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="badge badge-neutral mono" style={{ fontSize: '11px' }}>
+                Group ID #{currentGroup.id}
+              </span>
+              <span className={`badge ${isGroupPrivate ? 'badge-pending' : 'badge-approved'}`} style={{ fontSize: '11px' }}>
+                {isGroupPrivate ? '🔒 Private Ledger (2FA)' : '🌐 Public Ledger (Auditable)'}
+              </span>
+            </div>
             <span className="badge badge-approved" style={{ fontSize: '11px' }}>
               <ShieldCheck size={12} />
               <span>Smart Contract Verified</span>
@@ -237,46 +268,100 @@ export default function GroupManagement({
             <div>
               <strong>Membership:</strong> {currentGroup.members.length} verified accounts
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <div>
-                <strong>Private Passkey:</strong>{' '}
-                <span className="mono" style={{ color: 'var(--color-primary-light)', fontWeight: 800, letterSpacing: '1px' }}>
-                  {currentGroup.inviteCode || 'FS-4020'}
-                </span>
+
+            {isGroupPrivate ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                {/* Ledger ID */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Hash size={13} style={{ color: 'var(--color-primary-light)' }} />
+                    <strong>Ledger ID:</strong>{' '}
+                    <span className="mono" style={{ color: 'var(--color-primary-light)', fontWeight: 800, letterSpacing: '1px' }}>
+                      {currentLedgerId}
+                    </span>
+                  </div>
+                  <button 
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleCopy(currentLedgerId)}
+                    style={{ fontSize: '11px', height: '24px', padding: '0 8px' }}
+                  >
+                    {copiedAddress === currentLedgerId ? 'Copied' : 'Copy ID'}
+                  </button>
+                </div>
+
+                {/* Security Password */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <KeyRound size={13} style={{ color: 'var(--color-amber)' }} />
+                    <strong>Password:</strong>{' '}
+                    <span className="mono" style={{ color: 'var(--color-amber)', fontWeight: 800, letterSpacing: showDetailPassword ? '1px' : '2px' }}>
+                      {showDetailPassword ? currentPassword : '••••••••'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setShowDetailPassword(!showDetailPassword)}
+                      style={{ fontSize: '11px', height: '24px', padding: '0 8px' }}
+                    >
+                      {showDetailPassword ? 'Hide' : 'Show'}
+                    </button>
+                    <button 
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleCopy(currentPassword)}
+                      style={{ fontSize: '11px', height: '24px', padding: '0 8px' }}
+                    >
+                      {copiedAddress === currentPassword ? 'Copied' : 'Copy Pass'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick Action buttons */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', paddingTop: '4px' }}>
+                  <button 
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setIsQrModalOpen(true)}
+                    style={{ fontSize: '11px', height: '24px', padding: '0 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    title="View QR Code to share ledger"
+                  >
+                    <QrCode size={12} />
+                    <span>Show QR</span>
+                  </button>
+                  {onLockGroup && (
+                    <button 
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onLockGroup(currentGroup.id)}
+                      style={{ fontSize: '11px', height: '24px', padding: '0 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      title="Lock this private ledger session with passkey protection"
+                    >
+                      <Lock size={12} style={{ color: 'var(--color-amber)' }} />
+                      <span>Lock</span>
+                    </button>
+                  )}
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: '6px' }}>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-emerald-light)', fontSize: '12px' }}>
+                  <Globe size={14} />
+                  <span>Public Transparency Ledger • Anyone can audit on-chain</span>
+                </div>
                 <button 
                   type="button"
                   className="btn btn-secondary btn-sm"
                   onClick={() => setIsQrModalOpen(true)}
                   style={{ fontSize: '11px', height: '24px', padding: '0 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                  title="View QR Code to share ledger"
                 >
                   <QrCode size={12} />
                   <span>Show QR</span>
                 </button>
-                <button 
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => handleCopy(currentGroup.inviteCode || 'FS-4020')}
-                  style={{ fontSize: '11px', height: '24px', padding: '0 8px' }}
-                >
-                  {copiedAddress === (currentGroup.inviteCode || 'FS-4020') ? 'Copied' : 'Copy Key'}
-                </button>
-                {onLockGroup && (
-                  <button 
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => onLockGroup(currentGroup.id)}
-                    style={{ fontSize: '11px', height: '24px', padding: '0 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                    title="Lock this private ledger session with passkey protection"
-                  >
-                    <Lock size={12} style={{ color: 'var(--color-amber)' }} />
-                    <span>Lock</span>
-                  </button>
-                )}
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -391,10 +476,13 @@ export default function GroupManagement({
       {/* Create Group Modal */}
       {isCreateModalOpen && (
         <div className="modal-backdrop" onClick={() => setIsCreateModalOpen(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
             <div className="modal-header">
-              <h3>Deploy New Expense Group</h3>
-              <button className="close-btn" onClick={() => setIsCreateModalOpen(false)}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShieldCheck size={20} style={{ color: 'var(--color-primary-light)' }} />
+                <h3 style={{ margin: 0, fontSize: '18px' }}>Deploy New Blockchain Ledger</h3>
+              </div>
+              <button className="close-btn" onClick={() => setIsCreateModalOpen(false)} aria-label="Close modal">
                 ×
               </button>
             </div>
@@ -406,15 +494,62 @@ export default function GroupManagement({
             )}
 
             <form onSubmit={handleCreateGroupSubmit}>
+              {/* Type Selection: Private vs Public */}
+              <div style={{ marginBottom: '16px' }}>
+                <label className="form-label" style={{ marginBottom: '8px' }}>Ledger Architecture *</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div 
+                    onClick={() => setIsPrivateChoice(true)}
+                    style={{
+                      border: isPrivateChoice ? '2px solid var(--color-primary)' : '1px solid var(--border-medium)',
+                      background: isPrivateChoice ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-canvas)',
+                      padding: '12px',
+                      borderRadius: 'var(--radius-md)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '13px', color: isPrivateChoice ? 'var(--color-primary-light)' : 'var(--text-main)', marginBottom: '4px' }}>
+                      <Lock size={14} />
+                      <span>Private Ledger</span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                      2FA Protected: Joining devices must enter correct Ledger ID & Password.
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => setIsPrivateChoice(false)}
+                    style={{
+                      border: !isPrivateChoice ? '2px solid var(--color-emerald)' : '1px solid var(--border-medium)',
+                      background: !isPrivateChoice ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-canvas)',
+                      padding: '12px',
+                      borderRadius: 'var(--radius-md)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '13px', color: !isPrivateChoice ? 'var(--color-emerald-light)' : 'var(--text-main)', marginBottom: '4px' }}>
+                      <Globe size={14} />
+                      <span>Public Ledger</span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                      Open Transparency: Anyone can view & audit on-chain without password.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="form-group">
-                <label className="form-label">Group Name</label>
+                <label className="form-label">Ledger Name *</label>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Ski Trip Colorado 2026, Flat 3B"
+                  placeholder={isPrivateChoice ? "e.g. Bangalore Apt 501" : "e.g. Open Dev DAO"}
                   value={newGroupName}
                   onChange={e => setNewGroupName(e.target.value)}
                   required
+                  autoFocus
                 />
               </div>
 
@@ -423,11 +558,49 @@ export default function GroupManagement({
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Lift tickets, lodge stay, and group groceries"
+                  placeholder="e.g. Shared expenses, broadband, and maintenance"
                   value={newGroupDesc}
                   onChange={e => setNewGroupDesc(e.target.value)}
                 />
               </div>
+
+              {/* Private Ledger ID and Password fields if Private */}
+              {isPrivateChoice && (
+                <div style={{ background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '14px', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-primary-light)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <KeyRound size={13} />
+                    <span>Credentials for Multi-Device Joining:</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '11px' }}>Custom Ledger ID</label>
+                      <input
+                        type="text"
+                        className="form-input mono"
+                        placeholder="e.g. APT-501"
+                        value={customLedgerId}
+                        onChange={e => setCustomLedgerId(e.target.value.toUpperCase())}
+                        style={{ fontSize: '12px' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '11px' }}>Security Password</label>
+                      <input
+                        type="text"
+                        className="form-input mono"
+                        placeholder="e.g. PASS-5010"
+                        value={customPassword}
+                        onChange={e => setCustomPassword(e.target.value.toUpperCase())}
+                        style={{ fontSize: '12px' }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '6px' }}>
+                    Leave blank to auto-generate secure credentials.
+                  </div>
+                </div>
+              )}
 
               <div className="form-group">
                 <label className="form-label">Approval Consensus Policy</label>
@@ -454,27 +627,13 @@ export default function GroupManagement({
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Custom Private Passkey (Optional)</span>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Auto-generated if empty</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-input mono"
-                  placeholder="e.g. FS-9842"
-                  value={customPasskey}
-                  onChange={e => setCustomPasskey(e.target.value.toUpperCase())}
-                  style={{ textTransform: 'uppercase' }}
-                />
-              </div>
-
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setIsCreateModalOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Deploy Group
+                <button type="submit" className="btn btn-primary" style={{ gap: '6px' }}>
+                  <Sparkles size={14} />
+                  <span>Deploy Ledger</span>
                 </button>
               </div>
             </form>
@@ -785,57 +944,128 @@ export default function GroupManagement({
               </div>
             </div>
 
-            {/* Passkey & Web Share Row */}
-            <div 
-              style={{ 
-                background: 'var(--bg-surface-elevated)', 
-                border: '1px solid var(--border-subtle)', 
-                borderRadius: 'var(--radius-md)', 
-                padding: '12px 16px',
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '10px',
-                marginBottom: '20px'
-              }}
-            >
-              <div>
-                <span style={{ fontSize: '12px', color: 'var(--text-dim)', display: 'block' }}>Private Passkey:</span>
-                <span className="mono" style={{ fontSize: '15px', fontWeight: 800, color: 'var(--color-primary-light)', letterSpacing: '1px' }}>
-                  {currentGroup.inviteCode || 'FS-4020'}
-                </span>
+            {/* Credentials Row for Private vs Public */}
+            {isGroupPrivate ? (
+              <div 
+                style={{ 
+                  background: 'var(--bg-surface-elevated)', 
+                  border: '1px solid var(--border-subtle)', 
+                  borderRadius: 'var(--radius-md)', 
+                  padding: '14px 16px',
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  gap: '10px',
+                  marginBottom: '20px'
+                }}
+              >
+                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Lock size={13} style={{ color: 'var(--color-primary-light)' }} />
+                    <span>Private 2FA Credentials (Required on Joining Device):</span>
+                  </span>
+                  {typeof navigator !== 'undefined' && !!navigator.share && (
+                    <button 
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleNativeShare}
+                      style={{ fontSize: '11px', height: '24px', padding: '0 8px', gap: '4px' }}
+                      title="Share via WhatsApp, Telegram, iMessage..."
+                    >
+                      <Share2 size={12} />
+                      <span>Share...</span>
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  {/* Ledger ID */}
+                  <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <span style={{ fontSize: '10px', color: 'var(--text-dim)', display: 'block' }}>Ledger Access ID:</span>
+                      <span className="mono" style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-primary-light)' }}>
+                        {currentLedgerId}
+                      </span>
+                    </div>
+                    <button 
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        handleCopy(currentLedgerId);
+                        setCopiedIdInModal(true);
+                        setTimeout(() => setCopiedIdInModal(false), 2000);
+                      }}
+                      style={{ height: '24px', fontSize: '10px', padding: '0 6px' }}
+                    >
+                      {copiedIdInModal ? <Check size={11} /> : <Copy size={11} />}
+                      <span>{copiedIdInModal ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+
+                  {/* Security Password */}
+                  <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <span style={{ fontSize: '10px', color: 'var(--text-dim)', display: 'block' }}>Security Password:</span>
+                      <span className="mono" style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-amber)', letterSpacing: showModalPassword ? '1px' : '2px' }}>
+                        {showModalPassword ? currentPassword : '••••••••'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <button 
+                        type="button"
+                        onClick={() => setShowModalPassword(!showModalPassword)}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: '2px 4px', fontSize: '11px' }}
+                      >
+                        {showModalPassword ? <EyeOff size={12} /> : <Eye size={12} />}
+                      </button>
+                      <button 
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          handleCopy(currentPassword);
+                          setCopiedKeyInModal(true);
+                          setTimeout(() => setCopiedKeyInModal(false), 2000);
+                        }}
+                        style={{ height: '24px', fontSize: '10px', padding: '0 6px' }}
+                      >
+                        {copiedKeyInModal ? <Check size={11} /> : <Copy size={11} />}
+                        <span>{copiedKeyInModal ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button 
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => {
-                    handleCopy(currentGroup.inviteCode || 'FS-4020');
-                    setCopiedKeyInModal(true);
-                    setTimeout(() => setCopiedKeyInModal(false), 2000);
-                  }}
-                  style={{ fontSize: '11px' }}
-                >
-                  {copiedKeyInModal ? <Check size={12} style={{ color: '#34d399' }} /> : <Copy size={12} />}
-                  <span>{copiedKeyInModal ? 'Key Copied' : 'Copy Key'}</span>
-                </button>
-
+            ) : (
+              <div 
+                style={{ 
+                  background: 'rgba(16, 185, 129, 0.08)', 
+                  border: '1px solid rgba(16, 185, 129, 0.25)', 
+                  borderRadius: 'var(--radius-md)', 
+                  padding: '12px 16px',
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  marginBottom: '20px',
+                  color: 'var(--color-emerald-light)',
+                  fontSize: '12px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Globe size={16} />
+                  <span>Public Transparency Ledger • Anyone can scan or click the link to audit records freely.</span>
+                </div>
                 {typeof navigator !== 'undefined' && !!navigator.share && (
                   <button 
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={handleNativeShare}
-                    style={{ fontSize: '11px', gap: '4px' }}
-                    title="Share via WhatsApp, Telegram, iMessage..."
+                    style={{ fontSize: '11px', height: '26px', padding: '0 8px', gap: '4px' }}
                   >
                     <Share2 size={12} />
                     <span>Share...</span>
                   </button>
                 )}
               </div>
-            </div>
+            )}
 
             {/* Action buttons */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>

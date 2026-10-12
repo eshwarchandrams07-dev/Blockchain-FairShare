@@ -199,22 +199,33 @@ export default function Navbar({
             </div>
           )}
 
-          {/* Lock / Unlock Toggle Button */}
-          {isGroupUnlocked ? (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => onLockGroup && onLockGroup(currentGroup?.id)}
-              title="Lock this private ledger session with passkey protection"
-              style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
-            >
-              <Lock size={13} style={{ color: 'var(--color-amber)' }} />
-              <span>Lock Ledger</span>
-            </button>
+          {/* Public vs Private Ledger Status & Lock Control */}
+          {currentGroup?.isPrivate !== false ? (
+            isGroupUnlocked ? (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => onLockGroup && onLockGroup(currentGroup?.id)}
+                title="Lock this private ledger session with 2FA passkey protection"
+                style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
+              >
+                <Lock size={13} style={{ color: 'var(--color-amber)' }} />
+                <span>Lock Private Ledger</span>
+              </button>
+            ) : (
+              <span className="badge badge-pending" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Lock size={12} />
+                <span>Private Locked</span>
+              </span>
+            )
           ) : (
-            <span className="badge badge-pending" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Lock size={12} />
-              <span>Ledger Locked</span>
+            <span 
+              className="badge badge-approved" 
+              style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+              title="This is an open public ledger. Anyone can view and audit on-chain transactions without authentication."
+            >
+              <Globe size={12} />
+              <span>Public Ledger</span>
             </span>
           )}
 

@@ -57,13 +57,16 @@ export default function DashboardOverview({
         }}
       >
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '24px' }}>🏢</span>
             <h2 style={{ fontSize: '22px', color: 'var(--text-main)', fontWeight: 800 }}>
               {currentGroup.name === 'Shared Roommates Ledger' ? 'Shared Ledger' : currentGroup.name}
             </h2>
             <span className="badge badge-neutral" style={{ fontSize: '11px' }}>
               Group #{currentGroup.id}
+            </span>
+            <span className={`badge ${currentGroup?.isPrivate !== false ? 'badge-pending' : 'badge-approved'}`} style={{ fontSize: '11px' }}>
+              {currentGroup?.isPrivate !== false ? '🔒 Private Ledger' : '🌐 Public Ledger'}
             </span>
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '14px', maxWidth: '640px', margin: 0 }}>

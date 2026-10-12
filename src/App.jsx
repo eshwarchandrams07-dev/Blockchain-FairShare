@@ -85,12 +85,18 @@ export default function App() {
     try {
       const params = new URLSearchParams(window.location.search);
       const joinGroupId = params.get('joinGroup') || params.get('join') || params.get('groupId');
-      const inviteKey = params.get('key') || params.get('code') || params.get('pvt') || params.get('passkey');
+      const inviteLedgerId = params.get('ledgerId') || params.get('id');
+      const inviteKey = params.get('key') || params.get('code') || params.get('pvt') || params.get('passkey') || params.get('pass') || params.get('password');
+      const memberDisplayName = params.get('name') || params.get('user') || params.get('member');
       if (joinGroupId) {
-        const res = blockchainService.joinGroup(joinGroupId, inviteKey);
+        const res = blockchainService.joinGroup(joinGroupId, inviteKey, inviteLedgerId, memberDisplayName);
         if (res && res.success) {
           queueMicrotask(() => {
-            addToast('Private Ledger Unlocked', `Joined "${res.group.name}" with verified passkey!`, 'success');
+            addToast(
+              res.isPublic ? 'Public Ledger Connected' : 'Private Ledger Unlocked',
+              `Joined "${res.group.name}" successfully!`,
+              'success'
+            );
           });
         } else if (res && res.pending) {
           queueMicrotask(() => {
@@ -98,7 +104,7 @@ export default function App() {
           });
         } else if (res && !res.success) {
           queueMicrotask(() => {
-            addToast('Private Ledger Locked', res.error || 'Private passkey required to access this group ledger.', 'error');
+            addToast('Ledger Locked', res.error || 'Authentication required to access this ledger.', 'error');
           });
         }
       }
@@ -228,15 +234,21 @@ export default function App() {
 
   const isGroupUnlocked = blockchainService.isGroupUnlocked(currentGroup.id);
 
-  const handleCreateGroup = (name, description, policy, creatorName, customPasskey) => {
-    const newGrp = blockchainService.createGroup(name, description, policy, creatorName, customPasskey);
-    addToast('Smart Contract Deployed', `Created private group "${newGrp.name}" (Passkey: ${newGrp.inviteCode})`, 'success');
+  const handleCreateGroup = (name, description, policy, creatorName, isPrivate, customLedgerId, customPassword) => {
+    const newGrp = blockchainService.createGroup(name, description, policy, creatorName, isPrivate, customLedgerId, customPassword);
+    addToast(
+      'Smart Contract Deployed',
+      newGrp.isPrivate
+        ? `Created Private Ledger "${newGrp.name}" (ID: ${newGrp.ledgerId}, Pass: ${newGrp.password})`
+        : `Created Public Transparency Ledger "${newGrp.name}"`,
+      'success'
+    );
   };
 
-  const handleUnlockGroup = (groupId, passkey) => {
-    const res = blockchainService.joinGroup(groupId, passkey);
+  const handleUnlockGroup = (groupId, passkey, ledgerId, memberDisplayName) => {
+    const res = blockchainService.joinGroup(groupId, passkey, ledgerId, memberDisplayName);
     if (res.success) {
-      addToast('Private Ledger Unlocked', `Access granted to "${res.group.name}"!`, 'success');
+      addToast('Ledger Access Granted', `Device connected to "${res.group.name}"!`, 'success');
     }
     return res;
   };
@@ -719,7 +731,8 @@ export default function App() {
         onClose={() => setIsConnectDevicesModalOpen(false)}
         groupId={currentGroup.id}
         groupName={currentGroup.name}
-        inviteCode={currentGroup.inviteCode}
+        inviteCode={currentGroup.password || currentGroup.inviteCode}
+        currentGroup={currentGroup}
         activePersona={activePersona}
       />
 

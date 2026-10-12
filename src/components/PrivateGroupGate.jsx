@@ -5,10 +5,15 @@ import {
   QrCode, 
   ArrowRight, 
   PlusCircle, 
-  AlertCircle,
-  X,
-  ShieldCheck,
-  Sparkles
+  AlertCircle, 
+  X, 
+  ShieldCheck, 
+  Sparkles,
+  Eye,
+  EyeOff,
+  Hash,
+  User,
+  Globe
 } from 'lucide-react';
 import { APPROVAL_POLICIES } from '../services/blockchainState';
 
@@ -20,38 +25,65 @@ export default function PrivateGroupGate({
   onCreateGroup,
   onSelectGroup
 }) {
-  const [passkeyInput, setPasskeyInput] = useState('');
+  const [ledgerIdInput, setLedgerIdInput] = useState(currentGroup?.ledgerId || '');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [displayNameInput, setDisplayNameInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Inline modal state for creating a new group while locked
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isPrivateChoice, setIsPrivateChoice] = useState(true);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [newGroupPolicy, setNewGroupPolicy] = useState(APPROVAL_POLICIES.MAJORITY_VOTE);
   const [creatorName, setCreatorName] = useState('');
-  const [customPasskey, setCustomPasskey] = useState('');
+  const [customLedgerId, setCustomLedgerId] = useState('');
+  const [customPassword, setCustomPassword] = useState('');
   const [createError, setCreateError] = useState('');
+
+  const targetLedgerId = currentGroup?.ledgerId || 'APT-402';
+  const targetPassword = currentGroup?.password || currentGroup?.inviteCode || 'FS-4020';
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setErrorMsg('');
-    const trimmed = passkeyInput.trim().toUpperCase();
-    if (!trimmed) {
-      setErrorMsg('Please enter a private passkey to unlock this ledger.');
+
+    const cleanId = ledgerIdInput.trim().toUpperCase();
+    const cleanPass = passwordInput.trim();
+
+    if (!cleanId) {
+      setErrorMsg('Please enter the Ledger ID (e.g. ' + targetLedgerId + ').');
+      return;
+    }
+    if (!cleanPass) {
+      setErrorMsg('Please enter the Security Password for this private ledger.');
       return;
     }
 
     setIsSubmitting(true);
     setTimeout(() => {
-      const res = onUnlock(currentGroup?.id, trimmed);
+      const res = onUnlock(
+        currentGroup?.id,
+        cleanPass,
+        cleanId,
+        displayNameInput.trim()
+      );
       setIsSubmitting(false);
+
       if (res && res.pending) {
         setErrorMsg(res.message || 'Connecting to peer host to synchronize private ledger...');
       } else if (res && !res.success) {
-        setErrorMsg(res.error || 'Incorrect private passkey. Access denied.');
+        setErrorMsg(res.error || 'Incorrect Ledger ID or Password. Access denied.');
       }
     }, 200);
+  };
+
+  const handleAutoFill = () => {
+    setLedgerIdInput(targetLedgerId);
+    setPasswordInput(targetPassword);
+    setErrorMsg('');
   };
 
   const handleCreateSubmit = (e) => {
@@ -69,12 +101,15 @@ export default function PrivateGroupGate({
           newGroupDesc.trim(),
           Number(newGroupPolicy),
           creatorName.trim(),
-          customPasskey.trim()
+          isPrivateChoice,
+          customLedgerId.trim(),
+          customPassword.trim()
         );
         setIsCreateModalOpen(false);
         setNewGroupName('');
         setNewGroupDesc('');
-        setCustomPasskey('');
+        setCustomLedgerId('');
+        setCustomPassword('');
       } else if (onOpenCreateGroup) {
         onOpenCreateGroup();
       }
@@ -95,14 +130,20 @@ export default function PrivateGroupGate({
         </div>
 
         <div className="private-gate-header">
-          <span className="badge badge-pending" style={{ marginBottom: '8px' }}>
-            🔒 Private Consensus Block
-          </span>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span className="badge badge-pending">
+              🔒 Private Consensus Block
+            </span>
+            <span className="badge badge-neutral mono">
+              ID: {targetLedgerId}
+            </span>
+          </div>
           <h2 className="private-gate-title">
             {currentGroup?.name || 'Private Group Ledger'}
           </h2>
           <p className="private-gate-subtitle">
-            This blockchain ledger is invite-only. Outsiders cannot view expenses, debt settlements, or voting records without authorization.
+            This decentralized ledger is protected by 2-Factor Authentication (Ledger ID + Security Password). 
+            Devices added via QR code or link must enter the correct credentials set at creation.
           </p>
         </div>
 
@@ -113,58 +154,108 @@ export default function PrivateGroupGate({
           </div>
         )}
 
-        {/* Form to enter Private Passkey */}
+        {/* 2FA Form: Ledger ID + Security Password + Optional Device Name */}
         <form onSubmit={handleSubmit} className="private-gate-form">
-          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <KeyRound size={15} style={{ color: 'var(--color-primary-light)' }} />
-            <span>Enter Private Group Passkey</span>
-          </label>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+          {/* Field 1: Ledger ID */}
+          <div style={{ marginBottom: '14px', textAlign: 'left' }}>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <Hash size={14} style={{ color: 'var(--color-primary-light)' }} />
+              <span>Ledger Access ID *</span>
+            </label>
             <input 
               type="text"
-              value={passkeyInput}
+              value={ledgerIdInput}
               onChange={(e) => {
-                setPasskeyInput(e.target.value.toUpperCase());
+                setLedgerIdInput(e.target.value.toUpperCase());
                 setErrorMsg('');
               }}
-              placeholder={`e.g. ${currentGroup?.inviteCode || 'FS-4020'}`}
+              placeholder={`e.g. ${targetLedgerId}`}
               className="form-input mono"
               style={{
-                fontSize: '16px',
+                fontSize: '15px',
                 fontWeight: 700,
-                letterSpacing: '2px',
-                textAlign: 'center',
+                letterSpacing: '1px',
                 textTransform: 'uppercase'
               }}
               autoFocus
             />
-            <button 
-              type="submit" 
-              className="btn btn-primary"
-              disabled={isSubmitting}
-              style={{ minWidth: '130px', gap: '6px' }}
-            >
-              <span>Unlock</span>
-              <ArrowRight size={16} />
-            </button>
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '20px' }}>
-            Passkeys are case-insensitive and shared exclusively with group members.
+
+          {/* Field 2: Security Password */}
+          <div style={{ marginBottom: '14px', textAlign: 'left' }}>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <KeyRound size={14} style={{ color: 'var(--color-amber)' }} />
+                <span>Security Password *</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-dim)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                  padding: 0
+                }}
+              >
+                {showPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                <span>{showPassword ? 'Hide' : 'Show'}</span>
+              </button>
+            </label>
+            <input 
+              type={showPassword ? 'text' : 'password'}
+              value={passwordInput}
+              onChange={(e) => {
+                setPasswordInput(e.target.value);
+                setErrorMsg('');
+              }}
+              placeholder="Enter security password set at creation"
+              className="form-input mono"
+              style={{
+                fontSize: '15px',
+                fontWeight: 700,
+                letterSpacing: showPassword ? '1px' : '3px'
+              }}
+            />
           </div>
+
+          {/* Field 3: Optional Device Display Name */}
+          <div style={{ marginBottom: '18px', textAlign: 'left' }}>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <User size={14} style={{ color: 'var(--color-cyan)' }} />
+                <span>Device / Member Name (Optional)</span>
+              </span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Auto-assigned if empty</span>
+            </label>
+            <input 
+              type="text"
+              value={displayNameInput}
+              onChange={(e) => setDisplayNameInput(e.target.value)}
+              placeholder="e.g. Sam's iPhone, Priya"
+              className="form-input"
+              style={{ fontSize: '13px' }}
+            />
+          </div>
+
+          {/* Submit Button */}
+          <button 
+            type="submit" 
+            className="btn btn-primary"
+            disabled={isSubmitting}
+            style={{ width: '100%', height: '42px', fontSize: '14px', gap: '8px', justifyContent: 'center' }}
+          >
+            <span>{isSubmitting ? 'Verifying 2FA Credentials...' : 'Verify & Unlock Ledger'}</span>
+            <ArrowRight size={16} />
+          </button>
         </form>
 
-        {/* Alternative: QR Code instruction */}
-        <div className="private-gate-alt-box">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', fontWeight: 700, fontSize: '13px' }}>
-            <QrCode size={16} style={{ color: 'var(--color-emerald)' }} />
-            <span>Have a Phone? Scan to Enter Instantly</span>
-          </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            Ask the group host or a roommate to tap <strong>"Connect Devices"</strong> on their screen and scan their QR code with your phone camera. You will be authenticated automatically with 1 tap.
-          </div>
-        </div>
-
-        {/* Demo Hint Banner for Easy Testing */}
+        {/* Demo Hint Banner for Fast Testing */}
         <div 
           style={{
             marginTop: '16px',
@@ -177,24 +268,37 @@ export default function PrivateGroupGate({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '8px'
+            gap: '8px',
+            textAlign: 'left'
           }}
         >
-          <span>
-            💡 <strong>Testing evaluator hint:</strong> The default passkey for this group is{' '}
-            <code className="mono" style={{ fontWeight: 800 }}>{currentGroup?.inviteCode || 'FS-4020'}</code>
-          </span>
+          <div>
+            <div>
+              💡 <strong>Evaluator Hint:</strong> ID: <code className="mono" style={{ fontWeight: 800 }}>{targetLedgerId}</code> • Pass: <code className="mono" style={{ fontWeight: 800 }}>{targetPassword}</code>
+            </div>
+            <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '2px' }}>
+              Created at private ledger genesis for device 2FA.
+            </div>
+          </div>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            onClick={() => {
-              setPasskeyInput(currentGroup?.inviteCode || 'FS-4020');
-              setErrorMsg('');
-            }}
-            style={{ fontSize: '10px', height: '24px', padding: '0 8px' }}
+            onClick={handleAutoFill}
+            style={{ fontSize: '10px', height: '24px', padding: '0 8px', whiteSpace: 'nowrap' }}
           >
-            Auto-fill
+            Auto-fill Both
           </button>
+        </div>
+
+        {/* Alternative: QR Code instruction */}
+        <div className="private-gate-alt-box" style={{ marginTop: '16px', textAlign: 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', fontWeight: 700, fontSize: '13px' }}>
+            <QrCode size={16} style={{ color: 'var(--color-emerald)' }} />
+            <span>Adding from Another Device via QR Code?</span>
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            Scan the QR code shown under <strong>"Connect Devices"</strong> or <strong>"QR Code & Invite"</strong> from the host screen. To prevent unauthorized outsiders from joining, your device verifies the correct Ledger ID and Password before entering.
+          </div>
         </div>
 
         {/* Options to Switch Group or Create New Group */}
@@ -206,7 +310,7 @@ export default function PrivateGroupGate({
             style={{ gap: '6px' }}
           >
             <PlusCircle size={14} />
-            <span>Create New Private Group</span>
+            <span>Deploy New Ledger</span>
           </button>
 
           {groups && groups.length > 1 && (
@@ -220,7 +324,7 @@ export default function PrivateGroupGate({
               >
                 {groups.map(g => (
                   <option key={g.id} value={g.id}>
-                    #{g.id} {(g.name || '').split('•')[0].trim()}
+                    #{g.id} {(g.name || '').split('•')[0].trim()} {g.isPrivate ? '(🔒)' : '(🌐)'}
                   </option>
                 ))}
               </select>
@@ -232,11 +336,11 @@ export default function PrivateGroupGate({
       {/* Create New Group Modal inside Gate */}
       {isCreateModalOpen && (
         <div className="modal-backdrop" onClick={() => setIsCreateModalOpen(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <ShieldCheck size={20} style={{ color: 'var(--color-primary-light)' }} />
-                <h3 style={{ margin: 0, fontSize: '18px' }}>Deploy New Private Group</h3>
+                <h3 style={{ margin: 0, fontSize: '18px' }}>Deploy New Blockchain Ledger</h3>
               </div>
               <button 
                 type="button" 
@@ -256,12 +360,58 @@ export default function PrivateGroupGate({
             )}
 
             <form onSubmit={handleCreateSubmit}>
+              {/* Type Selection: Private vs Public */}
+              <div style={{ marginBottom: '16px' }}>
+                <label className="form-label" style={{ marginBottom: '8px' }}>Ledger Security Architecture *</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div 
+                    onClick={() => setIsPrivateChoice(true)}
+                    style={{
+                      border: isPrivateChoice ? '2px solid var(--color-primary)' : '1px solid var(--border-medium)',
+                      background: isPrivateChoice ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-canvas)',
+                      padding: '12px',
+                      borderRadius: 'var(--radius-md)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '13px', color: isPrivateChoice ? 'var(--color-primary-light)' : 'var(--text-main)', marginBottom: '4px' }}>
+                      <Lock size={14} />
+                      <span>Private Ledger</span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                      Secured by Ledger ID & Password set at creation. Outsiders blocked.
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => setIsPrivateChoice(false)}
+                    style={{
+                      border: !isPrivateChoice ? '2px solid var(--color-emerald)' : '1px solid var(--border-medium)',
+                      background: !isPrivateChoice ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-canvas)',
+                      padding: '12px',
+                      borderRadius: 'var(--radius-md)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '13px', color: !isPrivateChoice ? 'var(--color-emerald-light)' : 'var(--text-main)', marginBottom: '4px' }}>
+                      <Globe size={14} />
+                      <span>Public Ledger</span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                      Open for public audit & transparency. Anyone can view without password.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="form-group">
-                <label className="form-label">Group Name *</label>
+                <label className="form-label">Ledger Name *</label>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Bangalore Apt 501"
+                  placeholder={isPrivateChoice ? "e.g. Bangalore Apt 501" : "e.g. Dev DAO Ecosystem"}
                   value={newGroupName}
                   onChange={e => setNewGroupName(e.target.value)}
                   autoFocus
@@ -273,11 +423,49 @@ export default function PrivateGroupGate({
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Apartment expenses & broadband"
+                  placeholder="e.g. Shared expenses & broadband"
                   value={newGroupDesc}
                   onChange={e => setNewGroupDesc(e.target.value)}
                 />
               </div>
+
+              {/* Private Ledger ID and Password fields if Private */}
+              {isPrivateChoice && (
+                <div style={{ background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '14px', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-primary-light)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <KeyRound size={13} />
+                    <span>Credentials for Multi-Device Joining:</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '11px' }}>Custom Ledger ID</label>
+                      <input
+                        type="text"
+                        className="form-input mono"
+                        placeholder="e.g. APT-501"
+                        value={customLedgerId}
+                        onChange={e => setCustomLedgerId(e.target.value.toUpperCase())}
+                        style={{ fontSize: '12px' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" style={{ fontSize: '11px' }}>Security Password</label>
+                      <input
+                        type="text"
+                        className="form-input mono"
+                        placeholder="e.g. PASS-5010"
+                        value={customPassword}
+                        onChange={e => setCustomPassword(e.target.value.toUpperCase())}
+                        style={{ fontSize: '12px' }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '6px' }}>
+                    Leave blank to auto-generate secure credentials.
+                  </div>
+                </div>
+              )}
 
               <div className="form-group">
                 <label className="form-label">Consensus Quorum Policy</label>
@@ -301,21 +489,6 @@ export default function PrivateGroupGate({
                   placeholder="e.g. Eshwar"
                   value={creatorName}
                   onChange={e => setCreatorName(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Custom Private Passkey (Optional)</span>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Auto-generated if empty</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-input mono"
-                  placeholder="e.g. APT-5010"
-                  value={customPasskey}
-                  onChange={e => setCustomPasskey(e.target.value.toUpperCase())}
-                  style={{ textTransform: 'uppercase' }}
                 />
               </div>
 

@@ -187,9 +187,11 @@ class BlockchainStateService {
         if (this.pendingJoinGroupId) {
           const targetGrp = this.groups.find(g => Number(g.id) === Number(this.pendingJoinGroupId));
           if (targetGrp) {
-            this.joinGroup(this.pendingJoinGroupId, this.pendingJoinKey);
+            this.joinGroup(this.pendingJoinGroupId, this.pendingJoinKey, this.pendingJoinLedgerId, this.pendingMemberDisplayName);
             this.pendingJoinGroupId = null;
             this.pendingJoinKey = null;
+            this.pendingJoinLedgerId = null;
+            this.pendingMemberDisplayName = null;
           }
         }
         this.saveState(true);
@@ -253,13 +255,25 @@ class BlockchainStateService {
         this.currentGroupId = parsed.currentGroupId || 1;
         this.currentBlockNumber = parsed.currentBlockNumber || 19843600;
 
-        // Ensure all groups have a private inviteCode
+        // Ensure all groups have isPrivate, ledgerId, password, and inviteCode
         this.groups.forEach(g => {
+          if (g.isPrivate === undefined) {
+            g.isPrivate = g.id !== 3; // Group 3 is default public DAO
+          }
+          if (!g.ledgerId) {
+            if (g.id === 1) g.ledgerId = 'APT-402';
+            else if (g.id === 2) g.ledgerId = 'GOA-2026';
+            else if (g.id === 3) g.ledgerId = 'DEV-DAO';
+            else g.ledgerId = `GRP-${100 + g.id}`;
+          }
+          if (g.password === undefined) {
+            if (g.id === 1) g.password = 'FS-4020';
+            else if (g.id === 2) g.password = 'GOA-7788';
+            else if (g.id === 3) g.password = '';
+            else g.password = g.inviteCode || `PASS-${1000 + g.id * 111}`;
+          }
           if (!g.inviteCode) {
-            if (g.id === 1) g.inviteCode = 'FS-4020';
-            else if (g.id === 2) g.inviteCode = 'GOA-7788';
-            else if (g.id === 3) g.inviteCode = 'DAO-9900';
-            else g.inviteCode = `FS-${1000 + g.id * 111}`;
+            g.inviteCode = g.password || 'FS-4020';
           }
         });
 
@@ -418,6 +432,9 @@ class BlockchainStateService {
         creator: m1.address,
         approvalPolicy: APPROVAL_POLICIES.MAJORITY_VOTE, // 1
         createdAt: Date.now() - 86400000 * 7,
+        isPrivate: true,
+        ledgerId: 'APT-402',
+        password: 'FS-4020',
         inviteCode: 'FS-4020',
         members: [m1, m2, m3, m4, m5],
       },
@@ -428,16 +445,22 @@ class BlockchainStateService {
         creator: m1.address,
         approvalPolicy: APPROVAL_POLICIES.AUTO_APPROVE, // 0
         createdAt: Date.now() - 86400000 * 3,
+        isPrivate: true,
+        ledgerId: 'GOA-2026',
+        password: 'GOA-7788',
         inviteCode: 'GOA-7788',
         members: [m1, m2, m3, m4],
       },
       {
         id: 3,
         name: 'Dev DAO Equipment Fund',
-        description: 'High-value hardware fund requiring 100% unanimous cryptographic consensus',
+        description: 'High-value hardware fund requiring 100% unanimous cryptographic consensus (Public Audit)',
         creator: m1.address,
         approvalPolicy: APPROVAL_POLICIES.UNANIMOUS_VOTE, // 2
         createdAt: Date.now() - 86400000 * 2,
+        isPrivate: false, // PUBLIC COMMUNITY LEDGER (Open Transparency)
+        ledgerId: 'DEV-DAO',
+        password: '',
         inviteCode: 'DAO-9900',
         members: [m1, m2, m3],
       },
@@ -1151,6 +1174,11 @@ class BlockchainStateService {
     const grp = this.groups.find(g => Number(g.id) === numericId);
     if (!grp) return false;
 
+    // Public ledgers are always open to view by anyone
+    if (!grp.isPrivate) {
+      return true;
+    }
+
     return this.unlockedGroupIds.includes(numericId);
   }
 
@@ -1170,12 +1198,32 @@ class BlockchainStateService {
     this.notifyListeners();
   }
 
-  createGroup(name, description, approvalPolicy, creatorName, customCode) {
+  createGroup(name, description, approvalPolicy, creatorName, isPrivateOrCode = true, customLedgerId = '', customPassword = '') {
     const newId = this.groups.length > 0 ? Math.max(...this.groups.map(g => g.id)) + 1 : 1;
     const profile = this.getMyProfile();
-    const inviteCode = (customCode && customCode.trim())
-      ? customCode.trim().toUpperCase()
-      : `FS-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    let isPrivate = true;
+    let ledgerId = '';
+    let password = '';
+
+    if (typeof isPrivateOrCode === 'boolean') {
+      isPrivate = isPrivateOrCode;
+      ledgerId = (customLedgerId && customLedgerId.trim())
+        ? customLedgerId.trim().toUpperCase()
+        : (isPrivate ? `LEDGER-${Math.floor(100 + Math.random() * 900)}` : `DAO-${Math.floor(100 + Math.random() * 900)}`);
+      password = (isPrivate && customPassword && customPassword.trim())
+        ? customPassword.trim().toUpperCase()
+        : (isPrivate ? `FS-${Math.floor(1000 + Math.random() * 9000)}` : '');
+    } else {
+      // Legacy customCode argument
+      isPrivate = true;
+      ledgerId = `LEDGER-${Math.floor(100 + Math.random() * 900)}`;
+      password = (isPrivateOrCode && isPrivateOrCode.trim())
+        ? isPrivateOrCode.trim().toUpperCase()
+        : `FS-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    const inviteCode = password || 'PUBLIC';
 
     const newGroup = {
       id: newId,
@@ -1184,6 +1232,9 @@ class BlockchainStateService {
       creator: this.currentAccount,
       approvalPolicy: Number(approvalPolicy),
       createdAt: Date.now(),
+      isPrivate,
+      ledgerId,
+      password,
       inviteCode,
       members: [
         {
@@ -1208,7 +1259,7 @@ class BlockchainStateService {
       'GROUP_DEPLOYED',
       this.currentAccount,
       creatorName || profile.name,
-      `Created and deployed group "${name}" with ${POLICY_LABELS[approvalPolicy]} (Private Code: ${inviteCode})`
+      `Created and deployed ${isPrivate ? 'Private Ledger' : 'Public Ledger'} "${name}" [ID: ${ledgerId}${isPrivate ? `, Password: ${password}` : ' (Open Audit)'}]`
     );
 
     this.saveState();
@@ -1224,13 +1275,15 @@ class BlockchainStateService {
     return newCode;
   }
 
-  joinGroup(groupId, inviteKey = null) {
+  joinGroup(groupId, inviteKey = null, ledgerId = null, memberDisplayName = null) {
     const numericId = Number(groupId);
     const grp = this.groups.find(g => Number(g.id) === numericId);
     if (!grp) {
       // Group not yet loaded in local state; request sync from peers
       this.pendingJoinGroupId = numericId;
       this.pendingJoinKey = inviteKey;
+      this.pendingJoinLedgerId = ledgerId;
+      this.pendingMemberDisplayName = memberDisplayName;
       liveSync.broadcast({
         type: 'REQUEST_SYNC',
         targetGroupId: numericId,
@@ -1239,6 +1292,26 @@ class BlockchainStateService {
     }
 
     this.pendingJoinGroupId = null;
+    this.pendingJoinKey = null;
+    this.pendingJoinLedgerId = null;
+    this.pendingMemberDisplayName = null;
+
+    // If new device provided a custom display name
+    if (memberDisplayName && memberDisplayName.trim()) {
+      this.myProfile.name = memberDisplayName.trim();
+      try {
+        localStorage.setItem('fairshare_device_profile_v2', JSON.stringify(this.myProfile));
+      } catch {}
+    }
+
+    // Public group: open for anyone to explore or join
+    if (!grp.isPrivate) {
+      this.unlockGroup(numericId);
+      this.ensureMemberInGroup(grp);
+      this.currentGroupId = numericId;
+      this.saveState();
+      return { success: true, group: grp, isPublic: true };
+    }
 
     // Check if group is already unlocked for this user/device
     const alreadyUnlocked = this.isGroupUnlocked(numericId);
@@ -1250,34 +1323,45 @@ class BlockchainStateService {
       return { success: true, group: grp };
     }
 
-    // If a private invite key is provided (e.g. from QR code scan or user input)
-    if (inviteKey) {
-      const expected = (grp.inviteCode || '').trim().toUpperCase();
-      const provided = inviteKey.trim().toUpperCase();
-      const cleanExpected = expected.replace(/[^A-Z0-9]/g, '');
-      const cleanProvided = provided.replace(/[^A-Z0-9]/g, '');
+    // Private group: verify Ledger ID and Password
+    if (inviteKey || ledgerId) {
+      const expectedPassword = (grp.password || grp.inviteCode || '').trim().toUpperCase();
+      const providedPassword = (inviteKey || '').trim().toUpperCase();
+      const cleanExpectedPass = expectedPassword.replace(/[^A-Z0-9]/g, '');
+      const cleanProvidedPass = providedPassword.replace(/[^A-Z0-9]/g, '');
 
-      if (expected && (provided === expected || cleanProvided === cleanExpected)) {
+      const isPassValid = expectedPassword && (providedPassword === expectedPassword || cleanProvidedPass === cleanExpectedPass);
+
+      // Verify Ledger ID if group has one
+      let isIdValid = true;
+      if (grp.ledgerId && ledgerId) {
+        const expectedId = (grp.ledgerId || '').trim().toUpperCase();
+        const providedId = (ledgerId || '').trim().toUpperCase();
+        const cleanExpectedId = expectedId.replace(/[^A-Z0-9]/g, '');
+        const cleanProvidedId = providedId.replace(/[^A-Z0-9]/g, '');
+        isIdValid = (providedId === expectedId || cleanProvidedId === cleanExpectedId);
+      }
+
+      if (isPassValid && isIdValid) {
         this.unlockGroup(numericId);
         this.ensureMemberInGroup(grp);
         this.currentGroupId = numericId;
-        this.pendingJoinGroupId = null;
-        this.pendingJoinKey = null;
 
         this.addAuditLog(
           Number(groupId),
           'MEMBER_JOINED',
           this.myProfile.address,
           this.myProfile.name,
-          `${this.myProfile.name} verified with Private QR/Passkey and joined the group roster.`
+          `${this.myProfile.name} verified 2FA (ID: ${grp.ledgerId || 'OK'} & Password) and joined private ledger.`
         );
 
         this.saveState();
         return { success: true, group: grp };
       } else {
+        const errDetails = !isIdValid ? 'Incorrect Ledger ID.' : 'Incorrect Password.';
         return {
           success: false,
-          error: `Incorrect Private Passkey "${inviteKey}". Outsiders cannot access this ledger.`
+          error: `${errDetails} Access denied. Outsiders cannot join this private ledger.`
         };
       }
     }
@@ -1285,7 +1369,7 @@ class BlockchainStateService {
     // No key provided and not unlocked
     return {
       success: false,
-      error: 'This group is private. Please scan the group QR code or enter the private passkey.'
+      error: 'This ledger is private. Please enter the correct Ledger ID and Password.'
     };
   }
 
