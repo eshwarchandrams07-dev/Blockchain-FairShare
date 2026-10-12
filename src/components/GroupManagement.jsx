@@ -258,7 +258,7 @@ export default function GroupManagement({
             {currentGroup.description}
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--text-dim)', background: 'rgba(0,0,0,0.25)', padding: '12px 16px', borderRadius: 'var(--radius-md)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--text-dim)', background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-subtle)', padding: '12px 16px', borderRadius: 'var(--radius-md)' }}>
             <div>
               <strong>Creator:</strong> <span className="mono">{shortenAddress(currentGroup.creator)}</span>
             </div>
@@ -414,13 +414,15 @@ export default function GroupManagement({
               <div 
                 key={m.address}
                 style={{
-                  background: isUser ? 'rgba(99, 102, 241, 0.08)' : 'rgba(15, 23, 42, 0.6)',
-                  border: isUser ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid var(--border-subtle)',
+                  background: isUser ? 'rgba(99, 102, 241, 0.08)' : '#f0f2f5',
+                  border: isUser ? '1px solid rgba(99, 102, 241, 0.35)' : '1px solid #d9dce1',
                   borderRadius: 'var(--radius-md)',
                   padding: '16px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between'
+                  justifyContent: 'space-between',
+                  boxShadow: isUser ? '0 2px 8px rgba(99, 102, 241, 0.06)' : '0 1px 3px rgba(0, 0, 0, 0.04)',
+                  transition: 'all 0.2s ease'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -681,7 +683,7 @@ export default function GroupManagement({
                 Friends can scan this QR code with their mobile phone or click the invite link to instantly join this ledger with an auto-assigned Web3 identity.
               </p>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(15, 23, 42, 0.5)', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: '#f0f2f5', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
                 <div 
                   style={{ 
                     background: '#ffffff', 
