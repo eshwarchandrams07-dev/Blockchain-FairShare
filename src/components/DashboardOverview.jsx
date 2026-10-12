@@ -8,7 +8,8 @@ import {
   PlusCircle, 
   Zap, 
   ShieldCheck, 
-  Users
+  Users,
+  QrCode
 } from 'lucide-react';
 import { formatCents, shortenAddress } from '../utils/cryptoUtils';
 
@@ -18,6 +19,7 @@ export default function DashboardOverview({
   expenses,
   currentAccount,
   onOpenAddExpense,
+  onOpenConnectDevices,
   onSwitchTab,
 }) {
   // Calculate total approved volume
@@ -70,6 +72,15 @@ export default function DashboardOverview({
         </div>
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button 
+            className="btn btn-secondary"
+            onClick={onOpenConnectDevices || (() => onSwitchTab('group'))}
+            title="Scan QR code or copy invite link to add users to this ledger"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <QrCode size={16} style={{ color: 'var(--color-primary-light)' }} />
+            <span>Invite & QR Code</span>
+          </button>
           <button 
             className="btn btn-primary"
             onClick={onOpenAddExpense}

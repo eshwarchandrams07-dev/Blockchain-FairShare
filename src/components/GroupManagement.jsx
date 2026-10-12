@@ -7,7 +7,10 @@ import {
   Copy, 
   Check, 
   Settings,
-  Crown
+  Crown,
+  QrCode,
+  Share2,
+  Sparkles
 } from 'lucide-react';
 import { shortenAddress, formatCents } from '../utils/cryptoUtils';
 import { APPROVAL_POLICIES, POLICY_LABELS } from '../services/blockchainState';
@@ -23,8 +26,10 @@ export default function GroupManagement({
 }) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(null);
   const [copiedInvite, setCopiedInvite] = useState(false);
+  const [copiedKeyInModal, setCopiedKeyInModal] = useState(false);
 
   // New Group Form State
   const [newGroupName, setNewGroupName] = useState('');
@@ -42,6 +47,16 @@ export default function GroupManagement({
   const currentMember = (currentGroup.members || []).find(m => m.address.toLowerCase() === currentAccount.toLowerCase());
   const isAdmin = currentMember?.role === 'ADMIN' || (currentGroup.members || []).length <= 1;
 
+  // Invite URL and QR computation (dynamic for local or deployed Vercel domain)
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+  const isLocal = currentHost === 'localhost' || currentHost === '127.0.0.1';
+  const port = typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : ':5173';
+  const effectiveHost = isLocal ? `172.20.161.113${port}` : (typeof window !== 'undefined' ? window.location.host : '172.20.161.113:5173');
+  const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+  const keyParam = currentGroup.inviteCode ? `&key=${encodeURIComponent(currentGroup.inviteCode)}` : '';
+  const inviteUrl = `${protocol}//${effectiveHost}/?joinGroup=${currentGroup.id}${keyParam}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data=${encodeURIComponent(inviteUrl)}`;
+
   const handleCopy = (addr) => {
     navigator.clipboard.writeText(addr);
     setCopiedAddress(addr);
@@ -49,15 +64,27 @@ export default function GroupManagement({
   };
 
   const handleCopyInvite = () => {
-    const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    const port = typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : ':5173';
-    const host = isLocal ? `172.20.161.113${port}` : (typeof window !== 'undefined' ? window.location.host : '172.20.161.113:5173');
-    const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-    const keyParam = currentGroup.inviteCode ? `&key=${encodeURIComponent(currentGroup.inviteCode)}` : '';
-    const inviteUrl = `${protocol}//${host}?joinGroup=${currentGroup.id}${keyParam}`;
     navigator.clipboard.writeText(inviteUrl);
     setCopiedInvite(true);
     setTimeout(() => setCopiedInvite(false), 2500);
+  };
+
+  const handleNativeShare = async () => {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Join ${currentGroup.name} Ledger`,
+          text: `Join our decentralized expense group "${currentGroup.name}". Passkey: ${currentGroup.inviteCode || 'FS-4020'}`,
+          url: inviteUrl,
+        });
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          handleCopyInvite();
+        }
+      }
+    } else {
+      handleCopyInvite();
+    }
   };
 
   const handleCreateGroupSubmit = (e) => {
@@ -127,8 +154,19 @@ export default function GroupManagement({
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button 
               className="btn btn-secondary"
+              onClick={() => setIsQrModalOpen(true)}
+              title="Show QR Code and copy link to easily invite and add users to this ledger"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <QrCode size={16} style={{ color: 'var(--color-primary-light)' }} />
+              <span>QR Code & Invite</span>
+            </button>
+
+            <button 
+              className="btn btn-secondary"
               onClick={handleCopyInvite}
               title="Copy shareable link for friends on other devices to join this group"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               {copiedInvite ? <Check size={16} style={{ color: '#34d399' }} /> : <Copy size={16} />}
               <span>{copiedInvite ? 'Invite Link Copied!' : 'Copy Invite Link'}</span>
@@ -191,14 +229,26 @@ export default function GroupManagement({
                   {currentGroup.inviteCode || 'FS-4020'}
                 </span>
               </div>
-              <button 
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleCopy(currentGroup.inviteCode || 'FS-4020')}
-                style={{ fontSize: '11px', height: '24px', padding: '0 8px' }}
-              >
-                {copiedAddress === (currentGroup.inviteCode || 'FS-4020') ? 'Copied' : 'Copy Key'}
-              </button>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button 
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setIsQrModalOpen(true)}
+                  style={{ fontSize: '11px', height: '24px', padding: '0 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  title="View QR Code to share ledger"
+                >
+                  <QrCode size={12} />
+                  <span>Show QR</span>
+                </button>
+                <button 
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleCopy(currentGroup.inviteCode || 'FS-4020')}
+                  style={{ fontSize: '11px', height: '24px', padding: '0 8px' }}
+                >
+                  {copiedAddress === (currentGroup.inviteCode || 'FS-4020') ? 'Copied' : 'Copy Key'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -408,7 +458,7 @@ export default function GroupManagement({
       {/* Add Member Modal */}
       {isAddMemberModalOpen && (
         <div className="modal-backdrop" onClick={() => setIsAddMemberModalOpen(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '580px' }}>
             <div className="modal-header">
               <h3>Invite Member to {currentGroup.name}</h3>
               <button className="close-btn" onClick={() => setIsAddMemberModalOpen(false)}>
@@ -421,6 +471,107 @@ export default function GroupManagement({
                 {formError}
               </div>
             )}
+
+            {/* Quick Share / QR Code Option */}
+            <div 
+              style={{ 
+                background: 'rgba(99, 102, 241, 0.08)', 
+                border: '1px solid rgba(99, 102, 241, 0.25)', 
+                borderRadius: 'var(--radius-md)', 
+                padding: '16px', 
+                marginBottom: '20px' 
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: 'var(--text-main)' }}>
+                  <QrCode size={18} style={{ color: 'var(--color-primary-light)' }} />
+                  <span>Fast Invite via QR Code or Link</span>
+                </div>
+                <span className="badge badge-approved" style={{ fontSize: '10px' }}>
+                  Recommended
+                </span>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: 1.4 }}>
+                Friends can scan this QR code with their mobile phone or click the invite link to instantly join this ledger with an auto-assigned Web3 identity.
+              </p>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(15, 23, 42, 0.5)', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                <div 
+                  style={{ 
+                    background: '#ffffff', 
+                    padding: '6px', 
+                    borderRadius: '10px', 
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}
+                  onClick={() => { setIsAddMemberModalOpen(false); setIsQrModalOpen(true); }}
+                  title="Click to enlarge QR Code"
+                >
+                  <img 
+                    src={qrCodeUrl} 
+                    alt="Scan QR Code to join ledger" 
+                    style={{ width: '80px', height: '80px', display: 'block', borderRadius: '4px' }} 
+                  />
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Invite Link:</span>
+                    <span className="badge badge-neutral mono" style={{ fontSize: '10px' }}>
+                      Passkey: {currentGroup.inviteCode || 'FS-4020'}
+                    </span>
+                  </div>
+                  <div 
+                    className="mono" 
+                    style={{ 
+                      fontSize: '11px', 
+                      color: 'var(--color-primary-light)', 
+                      background: 'rgba(0,0,0,0.3)', 
+                      padding: '6px 10px', 
+                      borderRadius: 'var(--radius-sm)',
+                      overflow: 'hidden', 
+                      textOverflow: 'ellipsis', 
+                      whiteSpace: 'nowrap',
+                      border: '1px solid rgba(255,255,255,0.06)'
+                    }}
+                  >
+                    {inviteUrl}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleCopyInvite}
+                      style={{ fontSize: '11px', height: '28px', gap: '4px' }}
+                    >
+                      {copiedInvite ? <Check size={12} style={{ color: '#34d399' }} /> : <Copy size={12} />}
+                      <span>{copiedInvite ? 'Link Copied!' : 'Copy Invite Link'}</span>
+                    </button>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => { setIsAddMemberModalOpen(false); setIsQrModalOpen(true); }}
+                      style={{ fontSize: '11px', height: '28px', gap: '4px' }}
+                    >
+                      <QrCode size={12} />
+                      <span>Full QR Code</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '20px 0 16px' }}>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>
+                Or manually add Ethereum Wallet (0x...)
+              </span>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+            </div>
 
             <form onSubmit={handleAddMemberSubmit}>
               <div className="form-group">
@@ -468,6 +619,207 @@ export default function GroupManagement({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Dedicated QR Code & Share Invite Link Modal */}
+      {isQrModalOpen && (
+        <div className="modal-backdrop" onClick={() => setIsQrModalOpen(false)}>
+          <div 
+            className="modal-content" 
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '520px' }}
+          >
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div 
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: 'rgba(99, 102, 241, 0.15)',
+                    border: '1px solid rgba(99, 102, 241, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--color-primary-light)'
+                  }}
+                >
+                  <QrCode size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '18px', margin: 0 }}>Add Users to Ledger</h3>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    {currentGroup.name} • Group #{currentGroup.id}
+                  </div>
+                </div>
+              </div>
+              <button className="close-btn" onClick={() => setIsQrModalOpen(false)}>
+                ×
+              </button>
+            </div>
+
+            {/* QR Card Container */}
+            <div 
+              style={{
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(14, 116, 144, 0.08) 100%)',
+                border: '1px solid var(--border-medium)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '24px 20px',
+                marginBottom: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center',
+                boxShadow: 'var(--shadow-card)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <span style={{ fontSize: '18px' }}>📷</span>
+                <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-main)' }}>
+                  Scan with Phone Camera
+                </span>
+                <span 
+                  style={{
+                    fontSize: '11px',
+                    background: 'rgba(21, 128, 61, 0.15)',
+                    color: 'var(--color-emerald)',
+                    border: '1px solid rgba(21, 128, 61, 0.3)',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontWeight: 700
+                  }}
+                >
+                  Instant 1-Tap Join
+                </span>
+              </div>
+
+              {/* QR Image Box */}
+              <div 
+                style={{
+                  background: '#ffffff',
+                  padding: '16px',
+                  borderRadius: '18px',
+                  boxShadow: '0 10px 30px rgba(0, 0, 0, 0.15)',
+                  border: '2px solid rgba(99, 102, 241, 0.25)',
+                  marginBottom: '16px',
+                  display: 'inline-block'
+                }}
+              >
+                <img 
+                  src={qrCodeUrl}
+                  alt={`QR Code to join ${currentGroup.name}`}
+                  style={{
+                    width: '200px',
+                    height: '200px',
+                    display: 'block',
+                    borderRadius: '8px'
+                  }}
+                />
+              </div>
+
+              <div style={{ fontSize: '13px', color: 'var(--text-main)', fontWeight: 700, marginBottom: '4px' }}>
+                Scan to join <span style={{ color: 'var(--color-primary-light)' }}>{currentGroup.name}</span>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', maxWidth: '380px', lineHeight: 1.5 }}>
+                Opens directly in Safari or Chrome. Automatically authenticates the user into this private ledger and connects to the blockchain.
+              </div>
+            </div>
+
+            {/* Copy Invite Link Section */}
+            <div style={{ marginBottom: '16px' }}>
+              <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Sparkles size={14} style={{ color: 'var(--color-primary-light)' }} />
+                  <span>Shareable Ledger Invite Link</span>
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Group #{currentGroup.id}</span>
+              </label>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input 
+                  type="text" 
+                  readOnly 
+                  value={inviteUrl} 
+                  className="form-input mono" 
+                  style={{ fontSize: '12px', background: 'rgba(0,0,0,0.25)', color: 'var(--text-dim)', flex: 1 }}
+                  onClick={e => e.target.select()}
+                />
+                <button 
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleCopyInvite}
+                  style={{ minWidth: '130px', gap: '6px' }}
+                >
+                  {copiedInvite ? <Check size={16} /> : <Copy size={16} />}
+                  <span>{copiedInvite ? 'Copied!' : 'Copy Link'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Passkey & Web Share Row */}
+            <div 
+              style={{ 
+                background: 'var(--bg-surface-elevated)', 
+                border: '1px solid var(--border-subtle)', 
+                borderRadius: 'var(--radius-md)', 
+                padding: '12px 16px',
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '10px',
+                marginBottom: '20px'
+              }}
+            >
+              <div>
+                <span style={{ fontSize: '12px', color: 'var(--text-dim)', display: 'block' }}>Private Passkey:</span>
+                <span className="mono" style={{ fontSize: '15px', fontWeight: 800, color: 'var(--color-primary-light)', letterSpacing: '1px' }}>
+                  {currentGroup.inviteCode || 'FS-4020'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    handleCopy(currentGroup.inviteCode || 'FS-4020');
+                    setCopiedKeyInModal(true);
+                    setTimeout(() => setCopiedKeyInModal(false), 2000);
+                  }}
+                  style={{ fontSize: '11px' }}
+                >
+                  {copiedKeyInModal ? <Check size={12} style={{ color: '#34d399' }} /> : <Copy size={12} />}
+                  <span>{copiedKeyInModal ? 'Key Copied' : 'Copy Key'}</span>
+                </button>
+
+                {typeof navigator !== 'undefined' && !!navigator.share && (
+                  <button 
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleNativeShare}
+                    style={{ fontSize: '11px', gap: '4px' }}
+                    title="Share via WhatsApp, Telegram, iMessage..."
+                  >
+                    <Share2 size={12} />
+                    <span>Share...</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => setIsQrModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

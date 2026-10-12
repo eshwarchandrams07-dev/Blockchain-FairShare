@@ -489,6 +489,7 @@ export default function App() {
                 expenses={expenses}
                 currentAccount={currentAccount}
                 onOpenAddExpense={() => setIsAddExpenseOpen(true)}
+                onOpenConnectDevices={() => setIsConnectDevicesModalOpen(true)}
                 onSwitchTab={setActiveTab}
               />
             )}
