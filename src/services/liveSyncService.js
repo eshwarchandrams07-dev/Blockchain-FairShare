@@ -16,6 +16,7 @@ class LiveSyncService {
     this.status = 'DISCONNECTED'; // 'CONNECTED' | 'CONNECTING' | 'LOCAL_ONLY' | 'DISCONNECTED'
     this.lastReceivedTimestamp = 0;
     this.deviceId = 'dev_' + Math.random().toString(36).substring(2, 9);
+    this._onceConnectedCallbacks = []; // Queued callbacks to fire when WebSocket first connects
 
     this.initBroadcastChannel();
     this.initWebSocket();
@@ -48,6 +49,11 @@ class LiveSyncService {
         this.status = 'CONNECTED';
         this.wsRetryAttempts = 0;
         this.notifyStatusChange();
+        // Fire any queued onceConnected callbacks
+        const cbs = this._onceConnectedCallbacks.splice(0);
+        for (const cb of cbs) {
+          try { cb(); } catch (e) { console.warn('onceConnected callback error:', e); }
+        }
         // Request state sync from peers
         this.broadcast({
           type: 'REQUEST_SYNC',
@@ -137,6 +143,18 @@ class LiveSyncService {
       try {
         listener({ type: 'SYNC_STATUS_CHANGE', status: this.status });
       } catch {}
+    }
+  }
+
+  /**
+   * Register a callback to fire once when the WebSocket connects.
+   * If already connected, fires immediately.
+   */
+  onceConnected(callback) {
+    if (this.status === 'CONNECTED') {
+      try { callback(); } catch {}
+    } else {
+      this._onceConnectedCallbacks.push(callback);
     }
   }
 

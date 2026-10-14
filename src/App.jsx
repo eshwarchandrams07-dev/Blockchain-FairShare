@@ -107,6 +107,12 @@ export default function App() {
             addToast('Ledger Locked', res.error || 'Authentication required to access this ledger.', 'error');
           });
         }
+
+        // Clean URL params after processing so refresh doesn't re-trigger join
+        try {
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        } catch {}
       }
     } catch (err) {
       console.warn('URL join error:', err);
@@ -185,9 +191,21 @@ export default function App() {
       }
     });
 
+    const handleJoinSuccess = (e) => {
+      if (e?.detail?.group) {
+        addToast(
+          e.detail.isPublic ? 'Public Ledger Connected' : 'Private Ledger Unlocked',
+          `Joined "${e.detail.group.name}" successfully!`,
+          'success'
+        );
+      }
+    };
+    window.addEventListener('fairshare_pending_join_success', handleJoinSuccess);
+
     return () => {
       unsubscribe();
       unsubSync();
+      window.removeEventListener('fairshare_pending_join_success', handleJoinSuccess);
     };
   }, []);
 

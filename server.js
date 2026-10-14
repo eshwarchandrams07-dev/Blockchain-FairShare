@@ -3,6 +3,20 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
+import os from 'os';
+
+function getLocalLanIp() {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      const familyV4 = typeof net.family === 'string' ? net.family === 'IPv4' : net.family === 4;
+      if (familyV4 && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return 'localhost';
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +40,13 @@ const MIME_TYPES = {
 
 const server = http.createServer((req, res) => {
   let reqPath = (req.url || '/').split('?')[0];
+
+  if (reqPath === '/api/lan-ip') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ip: getLocalLanIp() }));
+    return;
+  }
+
   let filePath = path.join(DIST_DIR, reqPath);
 
   // Directory handling: try index.html

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Smartphone, 
   Laptop, 
@@ -15,6 +15,7 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
+import { fetchDetectedLanIp, saveLanIp, getEffectiveHost } from '../utils/networkUtils';
 
 export default function ConnectDevicesModal({
   isOpen,
@@ -35,7 +36,20 @@ export default function ConnectDevicesModal({
   // Compute origin and mobile URL
   const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
   const isLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1';
-  const [lanIp, setLanIp] = useState(isLocalhost ? '172.20.161.113' : currentHost);
+  const [lanIp, setLanIp] = useState(isLocalhost ? '' : currentHost);
+  const hasFetchedIp = React.useRef(false);
+
+  // Auto-detect LAN IP when modal opens
+  useEffect(() => {
+    if (isOpen && isLocalhost && !hasFetchedIp.current) {
+      hasFetchedIp.current = true;
+      fetchDetectedLanIp().then(ip => {
+        if (ip && ip !== 'localhost') {
+          setLanIp(ip);
+        }
+      });
+    }
+  }, [isOpen, isLocalhost]);
 
   if (!isOpen) return null;
 
@@ -43,8 +57,7 @@ export default function ConnectDevicesModal({
   const ledgerId = currentGroup?.ledgerId || 'APT-402';
   const password = currentGroup?.password || currentGroup?.inviteCode || inviteCode || 'FS-4020';
 
-  const port = typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : ':5173';
-  const effectiveHost = isLocalhost ? `${lanIp}${port}` : (typeof window !== 'undefined' ? window.location.host : '172.20.161.113:5173');
+  const effectiveHost = getEffectiveHost(lanIp);
   const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
 
   let mobileJoinUrl = '';
@@ -297,7 +310,7 @@ export default function ConnectDevicesModal({
                   <input 
                     type="text" 
                     value={lanIp} 
-                    onChange={e => setLanIp(e.target.value.trim())}
+                    onChange={e => { const v = e.target.value.trim(); setLanIp(v); saveLanIp(v); }}
                     className="form-input mono"
                     style={{ width: '150px', padding: '4px 8px', fontSize: '11px', height: '28px' }}
                     placeholder="e.g. 192.168.1.10"

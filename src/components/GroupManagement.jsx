@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   UserPlus, 
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { shortenAddress, formatCents } from '../utils/cryptoUtils';
 import { APPROVAL_POLICIES, POLICY_LABELS } from '../services/blockchainState';
+import { fetchDetectedLanIp, getEffectiveHost } from '../utils/networkUtils';
 
 export default function GroupManagement({
   groups,
@@ -56,6 +57,15 @@ export default function GroupManagement({
   const [memberRole, setMemberRole] = useState('MEMBER');
   const [formError, setFormError] = useState('');
 
+  // Dynamic LAN IP state
+  const [lanIp, setLanIp] = useState('');
+
+  useEffect(() => {
+    fetchDetectedLanIp().then(ip => {
+      if (ip) setLanIp(ip);
+    });
+  }, []);
+
   const currentMember = (currentGroup.members || []).find(m => m.address.toLowerCase() === currentAccount.toLowerCase());
   const isAdmin = currentMember?.role === 'ADMIN' || (currentGroup.members || []).length <= 1;
 
@@ -63,11 +73,8 @@ export default function GroupManagement({
   const currentLedgerId = currentGroup.ledgerId || (currentGroup.id === 1 ? 'APT-402' : `GRP-${currentGroup.id}`);
   const currentPassword = currentGroup.password || currentGroup.inviteCode || 'FS-4020';
 
-  // Invite URL and QR computation (dynamic for local or deployed Vercel domain)
-  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  const isLocal = currentHost === 'localhost' || currentHost === '127.0.0.1';
-  const port = typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : ':5173';
-  const effectiveHost = isLocal ? `172.20.161.113${port}` : (typeof window !== 'undefined' ? window.location.host : '172.20.161.113:5173');
+  // Invite URL and QR computation (dynamic for local or deployed domain)
+  const effectiveHost = getEffectiveHost(lanIp);
   const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
 
   const inviteUrl = isGroupPrivate

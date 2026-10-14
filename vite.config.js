@@ -1,6 +1,20 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { WebSocketServer } from 'ws'
+import os from 'os'
+
+function getLocalLanIp() {
+  const nets = os.networkInterfaces()
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      const familyV4 = typeof net.family === 'string' ? net.family === 'IPv4' : net.family === 4
+      if (familyV4 && !net.internal) {
+        return net.address
+      }
+    }
+  }
+  return 'localhost'
+}
 
 function setupWebSocketRelay(server) {
   const wss = new WebSocketServer({ noServer: true })
@@ -36,9 +50,17 @@ function fairShareSyncPlugin() {
     name: 'fairshare-sync-relay',
     configureServer(server) {
       setupWebSocketRelay(server)
+      server.middlewares.use('/api/lan-ip', (req, res) => {
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ ip: getLocalLanIp() }))
+      })
     },
     configurePreviewServer(server) {
       setupWebSocketRelay(server)
+      server.middlewares.use('/api/lan-ip', (req, res) => {
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ ip: getLocalLanIp() }))
+      })
     },
   }
 }
