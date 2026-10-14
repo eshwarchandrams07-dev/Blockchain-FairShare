@@ -17,6 +17,7 @@ import NetworkModal from './components/NetworkModal';
 import IpfsModal from './components/IpfsModal';
 import ArchitectureModal from './components/ArchitectureModal';
 import PrivateGroupGate from './components/PrivateGroupGate';
+import EnterLedgerModal from './components/EnterLedgerModal';
 import Toast from './components/Toast';
 import confetti from 'canvas-confetti';
 import { 
@@ -68,6 +69,7 @@ export default function App() {
   const [correctionModalExpense, setCorrectionModalExpense] = useState(null);
   const [inspectReceiptData, setInspectReceiptData] = useState(null);
   const [signVoteModalData, setSignVoteModalData] = useState(null); // { expense, voter, initialAgreed }
+  const [isEnterLedgerModalOpen, setIsEnterLedgerModalOpen] = useState(false);
 
   // Lock theme permanently to light mode and clear any legacy dark mode preference
   useEffect(() => {
@@ -85,10 +87,10 @@ export default function App() {
     try {
       const params = new URLSearchParams(window.location.search);
       const joinGroupId = params.get('joinGroup') || params.get('join') || params.get('groupId');
-      const inviteLedgerId = params.get('ledgerId') || params.get('id');
+      const inviteLedgerId = params.get('ledgerId') || params.get('id') || params.get('pvtLedger');
       const inviteKey = params.get('key') || params.get('code') || params.get('pvt') || params.get('passkey') || params.get('pass') || params.get('password');
       const memberDisplayName = params.get('name') || params.get('user') || params.get('member');
-      if (joinGroupId) {
+      if (joinGroupId || (inviteLedgerId && inviteKey)) {
         const res = blockchainService.joinGroup(joinGroupId, inviteKey, inviteLedgerId, memberDisplayName);
         if (res && res.success) {
           queueMicrotask(() => {
@@ -224,13 +226,6 @@ export default function App() {
     addToast('Profile Updated', `Device identity set to ${updated.name} (${updated.avatar})`, 'success');
   };
 
-  const handleSwitchAccount = (addr) => {
-    blockchainService.setCurrentAccount(addr);
-    setCurrentAccount(addr);
-    const p = blockchainService.getActivePersona();
-    addToast('Account Switched', `Connected as ${p.name} (${shortenAddress(addr)})`, 'info');
-  };
-
   const handleConnectMetaMask = async () => {
     const res = await blockchainService.connectMetaMask();
     if (res.success) {
@@ -267,6 +262,19 @@ export default function App() {
     const res = blockchainService.joinGroup(groupId, passkey, ledgerId, memberDisplayName);
     if (res.success) {
       addToast('Ledger Access Granted', `Device connected to "${res.group.name}"!`, 'success');
+    }
+    return res;
+  };
+
+  const handleEnterPrivateLedger = (ledgerId, password, memberDisplayName) => {
+    const res = blockchainService.enterLedgerByCredentials(ledgerId, password, memberDisplayName);
+    if (res && res.success) {
+      addToast(
+        'Private Ledger Unlocked',
+        `Device entered "${res.group.name}" (ID: ${res.group.ledgerId})!`,
+        'success'
+      );
+      setIsEnterLedgerModalOpen(false);
     }
     return res;
   };
@@ -345,7 +353,6 @@ export default function App() {
       {/* Navigation Header */}
       <Navbar
         currentAccount={currentAccount}
-        onSwitchAccount={handleSwitchAccount}
         activePersona={activePersona}
         onClaimFaucet={handleClaimFaucet}
         onConnectMetaMask={handleConnectMetaMask}
@@ -356,6 +363,7 @@ export default function App() {
         onOpenNetworkModal={() => setIsNetworkModalOpen(true)}
         onOpenIpfsModal={() => setIsIpfsModalOpen(true)}
         onOpenArchitectureModal={() => setIsArchitectureModalOpen(true)}
+        onOpenEnterLedgerModal={() => setIsEnterLedgerModalOpen(true)}
         currentGroup={currentGroup}
         isGroupUnlocked={isGroupUnlocked}
         onLockGroup={handleLockGroup}
@@ -600,6 +608,7 @@ export default function App() {
                 onLockGroup={handleLockGroup}
                 currentAccount={currentAccount}
                 groupBalances={groupBalances}
+                onOpenEnterLedgerModal={() => setIsEnterLedgerModalOpen(true)}
               />
             )}
           </>
@@ -780,6 +789,14 @@ export default function App() {
       <ArchitectureModal
         isOpen={isArchitectureModalOpen}
         onClose={() => setIsArchitectureModalOpen(false)}
+      />
+
+      {/* Enter Private Ledger Modal */}
+      <EnterLedgerModal
+        isOpen={isEnterLedgerModalOpen}
+        onClose={() => setIsEnterLedgerModalOpen(false)}
+        onEnterLedger={handleEnterPrivateLedger}
+        groups={groups}
       />
 
       {/* Toast Notifications Container */}

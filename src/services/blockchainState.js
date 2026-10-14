@@ -101,7 +101,7 @@ function isOriginalHostDevice() {
     // Check if there are URL join params (this is a joining device)
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('joinGroup') || params.get('join') || params.get('groupId')) {
+      if (params.get('joinGroup') || params.get('join') || params.get('groupId') || params.get('ledgerId') || params.get('id') || params.get('pvtLedger')) {
         return false;
       }
       // If accessed via LAN IP or external hostname (not localhost/127.0.0.1), this is a remote joining device
@@ -230,10 +230,22 @@ class BlockchainStateService {
         this.settlements = data.state.settlements || this.settlements;
         this.currentBlockNumber = data.state.currentBlockNumber || this.currentBlockNumber;
         this.ensureProfileInActiveGroup();
-        if (this.pendingJoinGroupId) {
-          const targetGrp = this.groups.find(g => Number(g.id) === Number(this.pendingJoinGroupId));
+        if (this.pendingJoinGroupId || this.pendingJoinLedgerId) {
+          let targetGrp = null;
+          if (this.pendingJoinLedgerId) {
+            const cleanPendingId = this.pendingJoinLedgerId.trim().toUpperCase();
+            const cleanAlpha = cleanPendingId.replace(/[^A-Z0-9]/g, '');
+            targetGrp = this.groups.find(g => {
+              if (!g.ledgerId) return false;
+              const gClean = g.ledgerId.trim().toUpperCase();
+              return gClean === cleanPendingId || (cleanAlpha && gClean.replace(/[^A-Z0-9]/g, '') === cleanAlpha);
+            });
+          }
+          if (!targetGrp && this.pendingJoinGroupId) {
+            targetGrp = this.groups.find(g => Number(g.id) === Number(this.pendingJoinGroupId));
+          }
           if (targetGrp) {
-            const joinRes = this.joinGroup(this.pendingJoinGroupId, this.pendingJoinKey, this.pendingJoinLedgerId, this.pendingMemberDisplayName);
+            const joinRes = this.joinGroup(targetGrp.id, this.pendingJoinKey, this.pendingJoinLedgerId, this.pendingMemberDisplayName);
             this.pendingJoinGroupId = null;
             this.pendingJoinKey = null;
             this.pendingJoinLedgerId = null;
@@ -425,7 +437,7 @@ class BlockchainStateService {
     if (typeof window === 'undefined') return false;
     try {
       const params = new URLSearchParams(window.location.search);
-      return !!(params.get('joinGroup') || params.get('join') || params.get('groupId'));
+      return !!(params.get('joinGroup') || params.get('join') || params.get('groupId') || params.get('ledgerId') || params.get('id') || params.get('pvtLedger'));
     } catch {
       return false;
     }
@@ -438,7 +450,7 @@ class BlockchainStateService {
   }
 
   _savePendingJoinStorage() {
-    if (!this.pendingJoinGroupId) return;
+    if (!this.pendingJoinGroupId && !this.pendingJoinLedgerId) return;
     try {
       localStorage.setItem('fairshare_pending_join', JSON.stringify({
         groupId: this.pendingJoinGroupId,
@@ -977,26 +989,20 @@ class BlockchainStateService {
   }
 
   setCurrentAccount(address) {
-    this.currentAccount = address;
-    const currentGroup = this.getCurrentGroup();
-    const targetMember = currentGroup?.members?.find(m => m.address.toLowerCase() === address.toLowerCase());
-    if (targetMember) {
-      this.myProfile = {
-        ...this.myProfile,
-        address: targetMember.address,
-        name: targetMember.name,
-        avatar: targetMember.avatar || '👤',
-        pin: targetMember.pin || '1234',
-        upiId: targetMember.upiId || `${targetMember.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-        tokenBalance: targetMember.tokenBalance ?? 50000,
-        role: targetMember.role || 'MEMBER',
-      };
-      try {
-        localStorage.setItem('fairshare_device_profile_v2', JSON.stringify(this.myProfile));
-      } catch {}
-    } else {
-      this.myProfile.address = address;
+    if (!address) return;
+    // Each device has only one user; prevent switching users or impersonating other members
+    if (this.myProfile && this.myProfile.address && address.toLowerCase() !== this.myProfile.address.toLowerCase()) {
+      if (this.isMetaMaskConnected) {
+        this.currentAccount = address;
+        this.myProfile.address = address;
+        try {
+          localStorage.setItem('fairshare_device_profile_v2', JSON.stringify(this.myProfile));
+        } catch {}
+        this.notifyListeners();
+      }
+      return;
     }
+    this.currentAccount = this.myProfile.address;
     this.notifyListeners();
   }
 
@@ -1381,38 +1387,60 @@ class BlockchainStateService {
   }
 
   joinGroup(groupId, inviteKey = null, ledgerId = null, memberDisplayName = null) {
-    const numericId = Number(groupId);
-    const grp = this.groups.find(g => Number(g.id) === numericId);
+    let grp = null;
+
+    // 1. If a ledgerId was provided, look up group by ledgerId across all groups first
+    if (ledgerId && typeof ledgerId === 'string' && ledgerId.trim()) {
+      const cleanLedgerId = ledgerId.trim().toUpperCase();
+      const cleanAlpha = cleanLedgerId.replace(/[^A-Z0-9]/g, '');
+      grp = this.groups.find(g => {
+        if (!g.ledgerId) return false;
+        const gClean = g.ledgerId.trim().toUpperCase();
+        return gClean === cleanLedgerId || (cleanAlpha && gClean.replace(/[^A-Z0-9]/g, '') === cleanAlpha);
+      });
+    }
+
+    // 2. If not found by ledgerId, look up by numeric groupId
+    if (!grp && groupId !== null && groupId !== undefined && String(groupId).trim() !== '') {
+      const numericId = Number(groupId);
+      if (!isNaN(numericId)) {
+        grp = this.groups.find(g => Number(g.id) === numericId);
+      }
+    }
+
     if (!grp) {
       // Group not yet loaded in local state; request sync from peers
-      this.pendingJoinGroupId = numericId;
+      const numId = (groupId !== null && groupId !== undefined && !isNaN(Number(groupId))) ? Number(groupId) : null;
+      this.pendingJoinGroupId = numId;
       this.pendingJoinKey = inviteKey;
-      this.pendingJoinLedgerId = ledgerId;
+      this.pendingJoinLedgerId = ledgerId ? ledgerId.trim().toUpperCase() : null;
       this.pendingMemberDisplayName = memberDisplayName;
-      // Update currentGroupId so the UI shows the correct gate
-      this.currentGroupId = numericId;
-      // Persist pending join so it survives page refresh
+      if (numId) {
+        this.currentGroupId = numId;
+      }
       this._savePendingJoinStorage();
 
       // Broadcast REQUEST_SYNC — if WebSocket isn't connected yet, queue a retry
       const doSync = () => {
         liveSync.broadcast({
           type: 'REQUEST_SYNC',
-          targetGroupId: numericId,
+          targetGroupId: numId,
+          targetLedgerId: this.pendingJoinLedgerId,
         });
       };
       doSync();
-      // Retry sync request when WebSocket connects (handles race condition)
       if (liveSync.getStatus() !== 'CONNECTED') {
         liveSync.onceConnected(() => doSync());
       }
-      return { success: false, pending: true, message: 'Syncing ledger from peer host...' };
+      return { success: false, pending: true, message: `Searching network for private ledger ${ledgerId || groupId || ''}... Syncing from peer host...` };
     }
 
+    const targetGroupId = Number(grp.id);
     this.pendingJoinGroupId = null;
     this.pendingJoinKey = null;
     this.pendingJoinLedgerId = null;
     this.pendingMemberDisplayName = null;
+    this._clearPendingJoinStorage();
 
     // If new device provided a custom display name
     if (memberDisplayName && memberDisplayName.trim()) {
@@ -1424,19 +1452,19 @@ class BlockchainStateService {
 
     // Public group: open for anyone to explore or join
     if (!grp.isPrivate) {
-      this.unlockGroup(numericId);
+      this.unlockGroup(targetGroupId);
       this.ensureMemberInGroup(grp);
-      this.currentGroupId = numericId;
+      this.currentGroupId = targetGroupId;
       this.saveState();
       return { success: true, group: grp, isPublic: true };
     }
 
     // Check if group is already unlocked for this user/device
-    const alreadyUnlocked = this.isGroupUnlocked(numericId);
+    const alreadyUnlocked = this.isGroupUnlocked(targetGroupId);
 
     if (alreadyUnlocked) {
       this.ensureMemberInGroup(grp);
-      this.currentGroupId = numericId;
+      this.currentGroupId = targetGroupId;
       this.saveState();
       return { success: true, group: grp };
     }
@@ -1461,16 +1489,16 @@ class BlockchainStateService {
       }
 
       if (isPassValid && isIdValid) {
-        this.unlockGroup(numericId);
+        this.unlockGroup(targetGroupId);
         this.ensureMemberInGroup(grp);
-        this.currentGroupId = numericId;
+        this.currentGroupId = targetGroupId;
 
         this.addAuditLog(
-          Number(groupId),
+          targetGroupId,
           'MEMBER_JOINED',
           this.myProfile.address,
           this.myProfile.name,
-          `${this.myProfile.name} verified 2FA (ID: ${grp.ledgerId || 'OK'} & Password) and joined private ledger.`
+          `${this.myProfile.name} verified credentials (ID: ${grp.ledgerId || 'OK'} & Password) and entered private ledger.`
         );
 
         this.saveState();
@@ -1489,6 +1517,19 @@ class BlockchainStateService {
       success: false,
       error: 'This ledger is private. Please enter the correct Ledger ID and Password.'
     };
+  }
+
+  /**
+   * Enter any private ledger directly by Ledger ID and Password
+   */
+  enterLedgerByCredentials(ledgerId, password, memberDisplayName = null) {
+    if (!ledgerId || !ledgerId.trim()) {
+      return { success: false, error: 'Please enter the Private Ledger ID (e.g. APT-402, GOA-2026).' };
+    }
+    if (!password || !password.trim()) {
+      return { success: false, error: 'Please enter the Security Password for this private ledger.' };
+    }
+    return this.joinGroup(null, password.trim(), ledgerId.trim().toUpperCase(), memberDisplayName);
   }
 
   ensureMemberInGroup(grp) {
@@ -1759,8 +1800,11 @@ class BlockchainStateService {
     const groupMember = group?.members.find(m => m.address.toLowerCase() === voterAddress.toLowerCase());
 
     const isMyDevice = voterAddress.toLowerCase() === this.myProfile.address.toLowerCase();
-    const expectedPin = isMyDevice ? this.myProfile.pin : (groupMember?.pin || '1234');
-    const voterName = isMyDevice ? this.myProfile.name : (groupMember?.name || voterAddress.substring(0, 8));
+    if (!isMyDevice) {
+      throw new Error(`Device Security Violation: This device can only sign votes for its own user account (${this.myProfile.name}). Each device has its own user.`);
+    }
+    const expectedPin = this.myProfile.pin;
+    const voterName = this.myProfile.name;
 
     // ANTI-CHEAT SECURITY CHECK: Verify Voter PIN
     if (!pin || pin.trim() !== expectedPin) {

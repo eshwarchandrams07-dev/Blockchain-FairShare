@@ -52,6 +52,11 @@ function SignVoteModalContent({
       return;
     }
 
+    if (!isMyDevice) {
+      setError(`Device Security: This device can only sign consensus votes for its own user account (${myProfile.name}). Each device has only one user.`);
+      return;
+    }
+
     if (!pin.trim()) {
       setError('Please enter your 4-digit security PIN to sign.');
       return;

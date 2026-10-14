@@ -219,27 +219,11 @@ export default function ConsensusBlock({
                 </div>
               )}
 
-              {/* Interactive Action Buttons for other pending participants (enforces their specific PIN) */}
+              {/* Other pending participants: votes can only be signed from that member's device */}
               {isPendingVote && !isCurrentActiveUser && isPending && (
-                <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                  <button 
-                    className="btn btn-secondary btn-sm"
-                    style={{ flex: 1, padding: '5px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                    onClick={() => onOpenSignModal && onOpenSignModal({ expense, voter: { ...v, address: v.participant }, initialAgreed: true })}
-                    title={`Sign agreement as ${v.name} (requires ${v.name}'s secret PIN)`}
-                  >
-                    <CheckCircle2 size={12} style={{ color: 'var(--color-emerald-light)' }} />
-                    <span>Agree as {v.name.split(' ')[0]} (PIN)</span>
-                  </button>
-                  <button 
-                    className="btn btn-outline-danger btn-sm"
-                    style={{ padding: '5px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                    onClick={() => onOpenSignModal && onOpenSignModal({ expense, voter: { ...v, address: v.participant }, initialAgreed: false })}
-                    title={`Reject as ${v.name} (requires ${v.name}'s secret PIN and reason)`}
-                  >
-                    <XCircle size={12} />
-                    <span>Reject</span>
-                  </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '11px', color: 'var(--text-dim)', background: 'var(--bg-canvas)', padding: '4px 8px', borderRadius: '4px' }}>
+                  <Clock size={12} style={{ color: 'var(--color-amber)', flexShrink: 0 }} />
+                  <span>Awaiting signature from {v.name}'s device</span>
                 </div>
               )}
             </div>

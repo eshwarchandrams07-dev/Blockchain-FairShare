@@ -31,6 +31,7 @@ export default function GroupManagement({
   onLockGroup,
   currentAccount,
   groupBalances,
+  onOpenEnterLedgerModal,
 }) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
@@ -217,6 +218,19 @@ export default function GroupManagement({
               >
                 <Lock size={16} style={{ color: 'var(--color-amber)' }} />
                 <span>Lock Ledger</span>
+              </button>
+            )}
+
+            {onOpenEnterLedgerModal && (
+              <button 
+                type="button"
+                className="btn btn-secondary"
+                onClick={onOpenEnterLedgerModal}
+                title="Enter any private ledger using its Ledger ID and Security Password"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid rgba(245, 158, 11, 0.4)', background: 'rgba(245, 158, 11, 0.08)' }}
+              >
+                <KeyRound size={16} style={{ color: 'var(--color-amber)' }} />
+                <span>Enter Private Ledger</span>
               </button>
             )}
 

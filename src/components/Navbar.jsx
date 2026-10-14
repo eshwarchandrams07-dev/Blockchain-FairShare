@@ -31,8 +31,8 @@ export default function Navbar({
   currentGroup,
   isGroupUnlocked = true,
   onLockGroup,
-  onSwitchAccount,
   onResetShowcase,
+  onOpenEnterLedgerModal,
 }) {
   const networkMode = blockchainService.getNetworkMode();
   const isBaseSepolia = networkMode === 'base-sepolia';
@@ -144,6 +144,26 @@ export default function Navbar({
             <span>Connect Devices</span>
           </button>
 
+          {/* Enter Private Ledger with ID & Password */}
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={onOpenEnterLedgerModal}
+            title="Enter any private ledger using its Ledger ID and Security Password"
+            id="enter-private-ledger-btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
+              background: 'rgba(245, 158, 11, 0.08)',
+              color: 'var(--text-main)',
+              fontWeight: 700,
+            }}
+          >
+            <KeyRound size={14} style={{ color: 'var(--color-amber)' }} />
+            <span>Enter Private Ledger</span>
+          </button>
+
           {/* Architecture & Specs Button */}
           <button
             type="button"
@@ -174,30 +194,6 @@ export default function Navbar({
             <Coins size={14} style={{ color: 'var(--color-amber)' }} />
             <span>Faucet (+₹500 FSINR)</span>
           </button>
-
-          {/* Quick Persona Switcher for Testing Multi-Party Perspectives */}
-          {currentGroup?.members && currentGroup.members.length > 1 && (
-            <div 
-              className="persona-switcher" 
-              title="Click any member to switch your active perspective & test their voting, PIN, and balance"
-            >
-              {currentGroup.members.map(m => {
-                const isActive = m.address.toLowerCase() === currentAccount.toLowerCase();
-                return (
-                  <button
-                    key={m.address}
-                    type="button"
-                    className={`persona-btn ${isActive ? 'active' : ''}`}
-                    onClick={() => onSwitchAccount && onSwitchAccount(m.address)}
-                    title={`Switch perspective to ${m.name} (${m.role}) • PIN: ${m.pin || '1234'}`}
-                  >
-                    <span>{m.avatar}</span>
-                    <span>{m.name.split(' ')[0]}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
 
           {/* Public vs Private Ledger Status & Lock Control */}
           {currentGroup?.isPrivate !== false ? (
@@ -260,6 +256,12 @@ export default function Navbar({
           >
             <span style={{ fontSize: '16px' }}>{activePersona?.avatar || '👤'}</span>
             <span style={{ fontWeight: 700 }}>{activePersona?.name || 'My Device'}</span>
+            <span 
+              className="badge badge-approved" 
+              style={{ fontSize: '9px', padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.5px' }}
+            >
+              This Device
+            </span>
             <User size={13} style={{ opacity: 0.8 }} />
           </button>
 
