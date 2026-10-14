@@ -1200,16 +1200,17 @@ class BlockchainStateService {
   // --- BALANCE CALCULATIONS ---
 
   calculateGroupBalances(groupId) {
-    const group = this.groups.find(g => g.id === groupId);
-    if (!group) return [];
+    const numId = Number(groupId);
+    const group = this.groups.find(g => Number(g.id) === numId);
+    if (!group || !group.members) return [];
 
     const balances = {};
-    group.members.forEach(m => {
+    (group.members || []).forEach(m => {
       balances[m.address.toLowerCase()] = 0;
     });
 
     // Process Approved Expenses
-    const groupExpenses = this.expenses.filter(e => e.groupId === groupId && e.status === EXPENSE_STATUS.APPROVED);
+    const groupExpenses = this.expenses.filter(e => Number(e.groupId) === numId && Number(e.status) === EXPENSE_STATUS.APPROVED);
 
     for (const exp of groupExpenses) {
       const payerAddr = (exp.payer || '').toLowerCase();
@@ -1225,7 +1226,7 @@ class BlockchainStateService {
     }
 
     // Process Confirmed Settlements
-    const groupSettlements = this.settlements.filter(s => s.groupId === groupId && s.status === 'CONFIRMED');
+    const groupSettlements = this.settlements.filter(s => Number(s.groupId) === numId && s.status === 'CONFIRMED');
 
     for (const st of groupSettlements) {
       const fromAddr = (st.from || '').toLowerCase();
@@ -1400,8 +1401,10 @@ class BlockchainStateService {
       throw new Error(`Consensus Block for Expense #${expenseId} is already ${STATUS_LABELS[exp.status] || 'closed'}.`);
     }
 
-    const group = this.groups.find(g => Number(g.id) === Number(groupId));
-    const groupMember = group?.members.find(m => m.address.toLowerCase() === voterAddress.toLowerCase());
+    const isMember = group?.members.some(m => m.address.toLowerCase() === voterAddress.toLowerCase());
+    if (group && !isMember) {
+      throw new Error(`Security Violation: Voter is not a participant in group #${groupId}.`);
+    }
 
     const isMyDevice = voterAddress.toLowerCase() === this.myProfile.address.toLowerCase();
     if (!isMyDevice) {
@@ -1853,7 +1856,8 @@ class BlockchainStateService {
 
   addAuditLog(groupId, action, actor, actorName, details) {
     this.currentBlockNumber += Math.floor(Math.random() * 3) + 1;
-    const prevLog = this.auditLogs[0];
+    // Track previous block hash per ledger so each group has an unbroken cryptographic chain
+    const prevLog = this.auditLogs.find(l => Number(l.groupId) === Number(groupId));
     const previousBlockHash = prevLog?.blockHash || '0x0000000000000000000000000000000000000000000000000000000000000000';
     const timestamp = Date.now();
     const nonce = this.auditLogs.length + 1;
@@ -1868,7 +1872,7 @@ class BlockchainStateService {
 
     const newLog = {
       id: nonce,
-      groupId,
+      groupId: Number(groupId),
       action,
       actor,
       actorName,
@@ -1895,7 +1899,7 @@ class BlockchainStateService {
       const curr = chronological[i];
       if (i > 0) {
         const prev = chronological[i - 1];
-        if (curr.previousBlockHash && curr.previousBlockHash !== prev.blockHash) {
+        if (curr.previousBlockHash && prev.blockHash && curr.previousBlockHash !== prev.blockHash) {
           return {
             valid: false,
             tamperedBlock: curr.blockNumber,
@@ -1912,7 +1916,8 @@ class BlockchainStateService {
   }
 
   getAuditLogs(groupId) {
-    return this.auditLogs.filter(l => l.groupId === groupId);
+    if (!groupId) return this.auditLogs;
+    return this.auditLogs.filter(l => Number(l.groupId) === Number(groupId));
   }
 }
 

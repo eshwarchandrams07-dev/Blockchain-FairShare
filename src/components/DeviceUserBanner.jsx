@@ -1,14 +1,7 @@
 import React, { useState } from 'react';
 import { 
-  UserCheck, 
   Edit3, 
-  Check, 
-  Smartphone, 
-  Sparkles, 
-  ShieldCheck, 
-  Globe,
-  Lock,
-  X 
+  Check 
 } from 'lucide-react';
 import { shortenAddress } from '../utils/cryptoUtils';
 
@@ -17,7 +10,7 @@ export default function DeviceUserBanner({
   isJoined,
   onJoinAndContinue,
   onUpdateName,
-  onOpenProfileModal,
+  _onOpenProfileModal,
   memberCount = 0,
 }) {
   const [isEditing, setIsEditing] = useState(false);

@@ -9,16 +9,14 @@ import {
   ArrowRight, 
   AlertCircle, 
   X, 
-  ShieldCheck, 
-  Sparkles,
-  CheckCircle2
+  ShieldCheck
 } from 'lucide-react';
 
 export default function EnterLedgerModal({
   isOpen,
   onClose,
   onEnterLedger,
-  groups = []
+  _groups = []
 }) {
   const [ledgerId, setLedgerId] = useState('');
   const [password, setPassword] = useState('');

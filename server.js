@@ -38,6 +38,8 @@ const MIME_TYPES = {
   '.woff2': 'font/woff2',
 };
 
+let cachedLedgerState = null;
+
 const server = http.createServer((req, res) => {
   let reqPath = (req.url || '/').split('?')[0];
 
@@ -45,6 +47,31 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ip: getLocalLanIp() }));
     return;
+  }
+
+  if (reqPath === '/api/ledger-state') {
+    if (req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ state: cachedLedgerState }));
+      return;
+    } else if (req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body);
+          if (parsed && (parsed.groups || parsed.state)) {
+            cachedLedgerState = parsed.state || parsed;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true }));
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'text/plain' });
+          res.end('Invalid JSON');
+        }
+      });
+      return;
+    }
   }
 
   let filePath = path.join(DIST_DIR, reqPath);
@@ -85,7 +112,8 @@ const wss = new WebSocketServer({ noServer: true });
 const clients = new Set();
 
 server.on('upgrade', (req, socket, head) => {
-  if (req.url === '/fairshare-sync') {
+  const pathname = (req.url || '').split('?')[0];
+  if (pathname === '/fairshare-sync') {
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
     });
@@ -96,10 +124,40 @@ server.on('upgrade', (req, socket, head) => {
 
 wss.on('connection', (ws) => {
   clients.add(ws);
+
+  // Immediately replay cached state to newly joined client
+  if (cachedLedgerState) {
+    try {
+      ws.send(JSON.stringify({
+        type: 'STATE_UPDATED',
+        state: cachedLedgerState,
+        fromCache: true,
+        timestamp: Date.now(),
+      }));
+    } catch (err) {
+      console.warn('Failed to replay cached state to new client:', err);
+    }
+  }
+
   ws.on('message', (message) => {
+    const msgStr = message.toString();
+    try {
+      const parsed = JSON.parse(msgStr);
+      if (parsed.type === 'STATE_UPDATED' && parsed.state) {
+        cachedLedgerState = parsed.state;
+      } else if (parsed.type === 'REQUEST_SYNC' && cachedLedgerState) {
+        ws.send(JSON.stringify({
+          type: 'STATE_UPDATED',
+          state: cachedLedgerState,
+          fromCache: true,
+          timestamp: Date.now(),
+        }));
+      }
+    } catch {}
+
     for (const client of clients) {
       if (client !== ws && client.readyState === 1 /* OPEN */) {
-        client.send(message.toString());
+        client.send(msgStr);
       }
     }
   });

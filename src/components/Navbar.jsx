@@ -1,3 +1,4 @@
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Coins, 
   Wallet, 
@@ -10,9 +11,14 @@ import {
   Globe,
   RotateCcw,
   Cpu,
-  Lock
+  Lock,
+  ChevronDown,
+  Check,
+  Plus,
+  Eye,
+  EyeOff
 } from 'lucide-react';
-import { shortenAddress, formatCents } from '../utils/cryptoUtils';
+import { shortenAddress, formatMaskedCents } from '../utils/cryptoUtils';
 import { blockchainService } from '../services/blockchainState';
 import { ipfsService } from '../services/ipfsService';
 
@@ -29,28 +35,238 @@ export default function Navbar({
   onOpenIpfsModal,
   onOpenArchitectureModal,
   currentGroup,
+  groups = [],
+  onSelectGroup,
   isGroupUnlocked = true,
   onLockGroup,
   onResetShowcase,
   onOpenEnterLedgerModal,
+  onOpenCreateGroup,
+  isPrivacyMaskActive = false,
+  onTogglePrivacyMask,
 }) {
+  const [isLedgerMenuOpen, setIsLedgerMenuOpen] = useState(false);
+  const ledgerDropdownRef = useRef(null);
+
   const networkMode = blockchainService.getNetworkMode();
   const isBaseSepolia = networkMode === 'base-sepolia';
   const hasPinataJwt = Boolean(ipfsService.getPinataJwt());
+  const isPrivate = currentGroup?.isPrivate !== false;
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (ledgerDropdownRef.current && !ledgerDropdownRef.current.contains(e.target)) {
+        setIsLedgerMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <header className="navbar">
       <div className="navbar-inner">
-        {/* Brand */}
-        <div className="nav-brand">
-          <div className="brand-icon-box">
-            <ArrowRightLeft size={22} />
+        {/* Left Section: Brand & Quick-Switch Ledger Hub */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+          <div className="nav-brand">
+            <div className="brand-icon-box">
+              <ArrowRightLeft size={22} />
+            </div>
+            <div className="brand-text">
+              <h1>
+                FairShare
+                <span className="brand-tag">DECENTRALIZED</span>
+              </h1>
+            </div>
           </div>
-          <div className="brand-text">
-            <h1>
-              FairShare
-              <span className="brand-tag">DECENTRALIZED</span>
-            </h1>
+
+          {/* Quick-Switch Ledger Hub */}
+          <div style={{ position: 'relative' }} ref={ledgerDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setIsLedgerMenuOpen(!isLedgerMenuOpen)}
+              className="btn btn-secondary btn-sm"
+              title="Switch Active Ledger Workspace"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 12px',
+                borderRadius: 'var(--radius-full)',
+                background: isPrivate ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                border: isPrivate ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid rgba(16, 185, 129, 0.35)',
+                color: isPrivate ? '#92400E' : '#065F46',
+                fontWeight: 700,
+                fontSize: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              {isPrivate ? (
+                <Lock size={13} style={{ color: '#D97706' }} />
+              ) : (
+                <Globe size={13} style={{ color: '#10B981' }} />
+              )}
+              <span style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {currentGroup?.name || 'Public Ledger'}
+              </span>
+              <span 
+                className="mono" 
+                style={{ 
+                  fontSize: '10px', 
+                  padding: '1px 6px', 
+                  borderRadius: '4px',
+                  background: isPrivate ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                  fontWeight: 800
+                }}
+              >
+                {currentGroup?.ledgerId || (isPrivate ? 'PVT' : 'PUB')}
+              </span>
+              <ChevronDown 
+                size={13} 
+                style={{ 
+                  opacity: 0.7, 
+                  transform: isLedgerMenuOpen ? 'rotate(180deg)' : 'none', 
+                  transition: 'transform 0.2s ease' 
+                }} 
+              />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isLedgerMenuOpen && (
+              <div 
+                className="glass-panel"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  left: 0,
+                  width: '320px',
+                  zIndex: 200,
+                  padding: '8px',
+                  borderRadius: 'var(--radius-lg)',
+                  border: '1px solid var(--border-medium)',
+                  boxShadow: '0 12px 32px rgba(0, 0, 0, 0.15)',
+                  background: 'var(--bg-surface)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}
+              >
+                <div style={{ padding: '6px 10px', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-dim)', borderBottom: '1px solid var(--border-subtle)', marginBottom: '4px' }}>
+                  Available Ledger Workspaces
+                </div>
+
+                <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  {groups.map(grp => {
+                    const isGrpActive = Number(grp.id) === Number(currentGroup?.id);
+                    const isGrpPrivate = grp.isPrivate !== false;
+                    return (
+                      <button
+                        key={grp.id}
+                        type="button"
+                        onClick={() => {
+                          if (onSelectGroup) onSelectGroup(grp.id);
+                          setIsLedgerMenuOpen(false);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 10px',
+                          borderRadius: 'var(--radius-md)',
+                          border: isGrpActive ? '1px solid var(--color-primary)' : '1px solid transparent',
+                          background: isGrpActive ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          width: '100%',
+                          transition: 'background 0.15s ease'
+                        }}
+                        onMouseEnter={e => { if (!isGrpActive) e.currentTarget.style.background = 'var(--bg-surface-elevated)'; }}
+                        onMouseLeave={e => { if (!isGrpActive) e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                          {isGrpPrivate ? (
+                            <Lock size={14} style={{ color: 'var(--color-amber)', flexShrink: 0 }} />
+                          ) : (
+                            <Globe size={14} style={{ color: 'var(--color-emerald-light)', flexShrink: 0 }} />
+                          )}
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '13px', fontWeight: isGrpActive ? 800 : 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {grp.name}
+                            </div>
+                            <div className="mono" style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
+                              {grp.ledgerId || `GRP-${grp.id}`} • {(grp.members || []).length} users
+                            </div>
+                          </div>
+                        </div>
+
+                        {isGrpActive && (
+                          <Check size={14} style={{ color: 'var(--color-primary-light)', flexShrink: 0 }} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '4px', paddingTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {onOpenEnterLedgerModal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenEnterLedgerModal();
+                        setIsLedgerMenuOpen(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 10px',
+                        borderRadius: 'var(--radius-md)',
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--color-amber)',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(245, 158, 11, 0.1)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <KeyRound size={13} />
+                      <span>Enter Private Ledger (ID &amp; Passkey)</span>
+                    </button>
+                  )}
+
+                  {onOpenCreateGroup && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenCreateGroup();
+                        setIsLedgerMenuOpen(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 10px',
+                        borderRadius: 'var(--radius-md)',
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--color-primary-light)',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.1)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <Plus size={13} />
+                      <span>Deploy New Ledger / Vault</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -185,6 +401,26 @@ export default function Navbar({
             <span>Architecture & Specs</span>
           </button>
 
+          {/* Stealth / Privacy Mask Mode Toggle */}
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onTogglePrivacyMask}
+            title={isPrivacyMaskActive ? "Stealth Mask is ON: Balances are hidden. Click to reveal." : "Enable Stealth Mask: Hide sensitive rupee amounts when screen-sharing or in public."}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              border: isPrivacyMaskActive ? '1px solid rgba(99, 102, 241, 0.45)' : '1px solid var(--border-medium)',
+              background: isPrivacyMaskActive ? 'rgba(99, 102, 241, 0.12)' : 'rgba(214, 204, 194, 0.45)',
+              color: isPrivacyMaskActive ? 'var(--color-primary-light)' : 'var(--text-main)',
+              fontWeight: 700,
+            }}
+          >
+            {isPrivacyMaskActive ? <EyeOff size={14} style={{ color: 'var(--color-primary-light)' }} /> : <Eye size={14} />}
+            <span>{isPrivacyMaskActive ? 'Stealth: ON' : 'Privacy Mask'}</span>
+          </button>
+
           {/* Testnet Token Faucet */}
           <button 
             className="btn btn-secondary btn-sm"
@@ -282,7 +518,7 @@ export default function Navbar({
                 fontWeight: 700
               }}
             >
-              {formatCents(activePersona?.tokenBalance || 0)} FSINR
+              {formatMaskedCents(activePersona?.tokenBalance || 0, isPrivacyMaskActive)} FSINR
             </span>
           </div>
 

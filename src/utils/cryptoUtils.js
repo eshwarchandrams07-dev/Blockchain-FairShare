@@ -26,6 +26,14 @@ export function formatCents(cents) {
 }
 
 /**
+ * Format paise/cents with optional privacy masking for Stealth Mode
+ */
+export function formatMaskedCents(cents, isMasked = false) {
+  if (isMasked) return '₹••••••';
+  return formatCents(cents);
+}
+
+/**
  * Parse INR rupee string/number to integer paise: "10.50" -> 1050
  */
 export function rupeesToPaise(rupees) {

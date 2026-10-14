@@ -21,6 +21,7 @@ import {
 import { shortenAddress, formatCents } from '../utils/cryptoUtils';
 import { APPROVAL_POLICIES, POLICY_LABELS } from '../services/blockchainState';
 import { fetchDetectedLanIp, getEffectiveHost } from '../utils/networkUtils';
+import CreateGroupModal from './CreateGroupModal';
 
 export default function GroupManagement({
   groups,
@@ -42,15 +43,6 @@ export default function GroupManagement({
   const [copiedIdInModal, setCopiedIdInModal] = useState(false);
   const [showDetailPassword, setShowDetailPassword] = useState(false);
   const [showModalPassword, setShowModalPassword] = useState(false);
-
-  // New Group Form State
-  const [isPrivateChoice, setIsPrivateChoice] = useState(true);
-  const [newGroupName, setNewGroupName] = useState('');
-  const [newGroupDesc, setNewGroupDesc] = useState('');
-  const [newGroupPolicy, setNewGroupPolicy] = useState(APPROVAL_POLICIES.MAJORITY_VOTE);
-  const [creatorName, setCreatorName] = useState('');
-  const [customLedgerId, setCustomLedgerId] = useState('');
-  const [customPassword, setCustomPassword] = useState('');
 
   // Add Member Form State
   const [memberAddress, setMemberAddress] = useState('');
@@ -114,33 +106,7 @@ export default function GroupManagement({
     }
   };
 
-  const handleCreateGroupSubmit = (e) => {
-    e.preventDefault();
-    setFormError('');
-    if (!newGroupName.trim()) {
-      setFormError('Please enter a group name');
-      return;
-    }
 
-    try {
-      onCreateGroup(
-        newGroupName.trim(),
-        newGroupDesc.trim(),
-        Number(newGroupPolicy),
-        creatorName.trim(),
-        isPrivateChoice,
-        customLedgerId.trim(),
-        customPassword.trim()
-      );
-      setIsCreateModalOpen(false);
-      setNewGroupName('');
-      setNewGroupDesc('');
-      setCustomLedgerId('');
-      setCustomPassword('');
-    } catch (err) {
-      setFormError(err.message || 'Failed to create group');
-    }
-  };
 
   const handleAddMemberSubmit = (e) => {
     e.preventDefault();
@@ -516,173 +482,12 @@ export default function GroupManagement({
         </div>
       </div>
 
-      {/* Create Group Modal */}
-      {isCreateModalOpen && (
-        <div className="modal-backdrop" onClick={() => setIsCreateModalOpen(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <ShieldCheck size={20} style={{ color: 'var(--color-primary-light)' }} />
-                <h3 style={{ margin: 0, fontSize: '18px' }}>Deploy New Blockchain Ledger</h3>
-              </div>
-              <button className="close-btn" onClick={() => setIsCreateModalOpen(false)} aria-label="Close modal">
-                ×
-              </button>
-            </div>
-
-            {formError && (
-              <div style={{ background: 'var(--bg-surface-elevated)', border: '1px solid rgba(244, 63, 94, 0.4)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '16px', color: 'var(--color-rose)', fontSize: '13px', fontWeight: 600 }}>
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateGroupSubmit}>
-              {/* Type Selection: Private vs Public */}
-              <div style={{ marginBottom: '16px' }}>
-                <label className="form-label" style={{ marginBottom: '8px' }}>Ledger Architecture *</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div 
-                    onClick={() => setIsPrivateChoice(true)}
-                    style={{
-                      border: isPrivateChoice ? '2px solid var(--color-primary)' : '1px solid var(--border-medium)',
-                      background: isPrivateChoice ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-canvas)',
-                      padding: '12px',
-                      borderRadius: 'var(--radius-md)',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '13px', color: isPrivateChoice ? 'var(--color-primary-light)' : 'var(--text-main)', marginBottom: '4px' }}>
-                      <Lock size={14} />
-                      <span>Private Ledger</span>
-                    </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                      2FA Protected: Joining devices must enter correct Ledger ID & Password.
-                    </div>
-                  </div>
-
-                  <div 
-                    onClick={() => setIsPrivateChoice(false)}
-                    style={{
-                      border: !isPrivateChoice ? '2px solid var(--color-emerald)' : '1px solid var(--border-medium)',
-                      background: !isPrivateChoice ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-canvas)',
-                      padding: '12px',
-                      borderRadius: 'var(--radius-md)',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '13px', color: !isPrivateChoice ? 'var(--color-emerald-light)' : 'var(--text-main)', marginBottom: '4px' }}>
-                      <Globe size={14} />
-                      <span>Public Ledger</span>
-                    </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                      Open Transparency: Anyone can view & audit on-chain without password.
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Ledger Name *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder={isPrivateChoice ? "e.g. Bangalore Apt 501" : "e.g. Open Dev DAO"}
-                  value={newGroupName}
-                  onChange={e => setNewGroupName(e.target.value)}
-                  required
-                  autoFocus
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Description / Purpose</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Shared expenses, broadband, and maintenance"
-                  value={newGroupDesc}
-                  onChange={e => setNewGroupDesc(e.target.value)}
-                />
-              </div>
-
-              {/* Private Ledger ID and Password fields if Private */}
-              {isPrivateChoice && (
-                <div style={{ background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '14px', marginBottom: '16px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-primary-light)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <KeyRound size={13} />
-                    <span>Credentials for Multi-Device Joining:</span>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '11px' }}>Custom Ledger ID</label>
-                      <input
-                        type="text"
-                        className="form-input mono"
-                        placeholder="e.g. APT-501"
-                        value={customLedgerId}
-                        onChange={e => setCustomLedgerId(e.target.value.toUpperCase())}
-                        style={{ fontSize: '12px' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '11px' }}>Security Password</label>
-                      <input
-                        type="text"
-                        className="form-input mono"
-                        placeholder="e.g. PASS-5010"
-                        value={customPassword}
-                        onChange={e => setCustomPassword(e.target.value.toUpperCase())}
-                        style={{ fontSize: '12px' }}
-                      />
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '6px' }}>
-                    Leave blank to auto-generate secure credentials.
-                  </div>
-                </div>
-              )}
-
-              <div className="form-group">
-                <label className="form-label">Approval Consensus Policy</label>
-                <select
-                  className="form-select"
-                  value={newGroupPolicy}
-                  onChange={e => setNewGroupPolicy(e.target.value)}
-                >
-                  <option value={APPROVAL_POLICIES.AUTO_APPROVE}>Optimistic (Auto-approve with dispute window)</option>
-                  <option value={APPROVAL_POLICIES.MAJORITY_VOTE}>Majority Vote (Over 50% participant quorum)</option>
-                  <option value={APPROVAL_POLICIES.UNANIMOUS_VOTE}>Unanimous Vote (100% participant agreement)</option>
-                  <option value={APPROVAL_POLICIES.ADMIN_ONLY}>Admin Only (Administrator approves)</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Your Admin Display Name</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Alice"
-                  value={creatorName}
-                  onChange={e => setCreatorName(e.target.value)}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setIsCreateModalOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary" style={{ gap: '6px' }}>
-                  <Sparkles size={14} />
-                  <span>Deploy Ledger</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Create Group Modal with Presets */}
+      <CreateGroupModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreateGroup={onCreateGroup}
+      />
 
       {/* Add Member Modal */}
       {isAddMemberModalOpen && (

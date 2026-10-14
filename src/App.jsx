@@ -18,6 +18,7 @@ import IpfsModal from './components/IpfsModal';
 import ArchitectureModal from './components/ArchitectureModal';
 import PrivateGroupGate from './components/PrivateGroupGate';
 import EnterLedgerModal from './components/EnterLedgerModal';
+import CreateGroupModal from './components/CreateGroupModal';
 import DeviceUserBanner from './components/DeviceUserBanner';
 import Toast from './components/Toast';
 import confetti from 'canvas-confetti';
@@ -71,6 +72,29 @@ export default function App() {
   const [inspectReceiptData, setInspectReceiptData] = useState(null);
   const [signVoteModalData, setSignVoteModalData] = useState(null); // { expense, voter, initialAgreed }
   const [isEnterLedgerModalOpen, setIsEnterLedgerModalOpen] = useState(false);
+  const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
+  const [isPrivacyMaskActive, setIsPrivacyMaskActive] = useState(() => {
+    try {
+      return localStorage.getItem('fairshare_stealth_mask') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleTogglePrivacyMask = () => {
+    setIsPrivacyMaskActive(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('fairshare_stealth_mask', String(next));
+      } catch {}
+      addToast(
+        next ? 'Stealth Privacy Mask Active' : 'Privacy Mask Disabled',
+        next ? 'Masked financial figures with ₹•••••• across private views.' : 'Restored visible rupee amounts.',
+        'info'
+      );
+      return next;
+    });
+  };
 
   // Lock theme permanently to light mode and clear any legacy dark mode preference
   useEffect(() => {
@@ -383,8 +407,13 @@ export default function App() {
         onOpenArchitectureModal={() => setIsArchitectureModalOpen(true)}
         onOpenEnterLedgerModal={() => setIsEnterLedgerModalOpen(true)}
         currentGroup={currentGroup}
+        groups={groups}
+        onSelectGroup={handleSelectGroup}
+        onOpenCreateGroup={() => setIsCreateGroupModalOpen(true)}
         isGroupUnlocked={isGroupUnlocked}
         onLockGroup={handleLockGroup}
+        isPrivacyMaskActive={isPrivacyMaskActive}
+        onTogglePrivacyMask={handleTogglePrivacyMask}
         onResetShowcase={() => {
           blockchainService.resetToDefaults();
           addToast('Public Ledger Reset', 'Initialized 1 Public Ledger with 0 initial users. Ready for multi-device connections!', 'success');
@@ -571,6 +600,8 @@ export default function App() {
                 onOpenAddExpense={() => setIsAddExpenseOpen(true)}
                 onOpenConnectDevices={() => setIsConnectDevicesModalOpen(true)}
                 onSwitchTab={setActiveTab}
+                isPrivacyMaskActive={isPrivacyMaskActive}
+                onLockGroup={handleLockGroup}
               />
             )}
 
@@ -825,6 +856,13 @@ export default function App() {
         onClose={() => setIsEnterLedgerModalOpen(false)}
         onEnterLedger={handleEnterPrivateLedger}
         groups={groups}
+      />
+
+      {/* Deploy New Ledger / Vault Modal with Presets */}
+      <CreateGroupModal
+        isOpen={isCreateGroupModalOpen}
+        onClose={() => setIsCreateGroupModalOpen(false)}
+        onCreateGroup={handleCreateGroup}
       />
 
       {/* Toast Notifications Container */}

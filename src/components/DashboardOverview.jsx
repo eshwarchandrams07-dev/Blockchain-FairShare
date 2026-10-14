@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   TrendingUp, 
   ArrowDownLeft, 
@@ -9,9 +9,13 @@ import {
   Zap, 
   ShieldCheck, 
   Users,
-  QrCode
+  QrCode,
+  Globe,
+  Lock,
+  Check,
+  Share2
 } from 'lucide-react';
-import { formatCents, shortenAddress } from '../utils/cryptoUtils';
+import { formatMaskedCents, shortenAddress } from '../utils/cryptoUtils';
 
 export default function DashboardOverview({
   currentGroup,
@@ -21,9 +25,13 @@ export default function DashboardOverview({
   onOpenAddExpense,
   onOpenConnectDevices,
   onSwitchTab,
+  isPrivacyMaskActive = false,
+  onLockGroup,
 }) {
+  const [copiedAuditLink, setCopiedAuditLink] = useState(false);
+
   // Calculate total approved volume
-  const approvedExpenses = expenses.filter(e => e.groupId === currentGroup.id && e.status === 1);
+  const approvedExpenses = expenses.filter(e => Number(e.groupId) === Number(currentGroup.id) && Number(e.status) === 1);
   const totalVolume = approvedExpenses.reduce((sum, e) => sum + e.totalAmount, 0);
 
   // Find current user's balance
@@ -31,42 +39,58 @@ export default function DashboardOverview({
   const userNetBalance = userBalanceObj ? userBalanceObj.netBalance : 0;
 
   // Counts
-  const pendingApprovalsCount = expenses.filter(e => e.groupId === currentGroup.id && e.status === 0).length;
-  const activeDisputesCount = expenses.filter(e => e.groupId === currentGroup.id && e.status === 3).length;
+  const pendingApprovalsCount = expenses.filter(e => Number(e.groupId) === Number(currentGroup.id) && Number(e.status) === 0).length;
+  const activeDisputesCount = expenses.filter(e => Number(e.groupId) === Number(currentGroup.id) && Number(e.status) === 3).length;
 
   // Check sum of balances equals 0
   const totalBalanceSum = groupBalances.reduce((sum, b) => sum + b.netBalance, 0);
   const isIntegritySound = Math.abs(totalBalanceSum) <= 1; // within 1 cent rounding
+  const isPrivate = currentGroup?.isPrivate !== false;
+
+  const handleCopyAuditorLink = () => {
+    const url = typeof window !== 'undefined' 
+      ? `${window.location.origin}/?joinGroup=${currentGroup.id}&view=auditor`
+      : `/?joinGroup=${currentGroup.id}`;
+    navigator.clipboard.writeText(url);
+    setCopiedAuditLink(true);
+    setTimeout(() => setCopiedAuditLink(false), 2000);
+  };
 
   return (
     <div>
-      {/* Top Welcome / Group Banner */}
+      {/* Top Welcome & Distinct Ledger Identity Banner */}
       <div 
         className="glass-panel" 
         style={{ 
           padding: '24px 28px', 
-          marginBottom: '24px', 
+          marginBottom: '20px', 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '16px',
-          background: '#ffffff',
-          border: '1px solid var(--border-medium)',
+          background: isPrivate 
+            ? 'linear-gradient(135deg, rgba(254, 243, 199, 0.4) 0%, rgba(255, 255, 255, 0.95) 100%)'
+            : 'linear-gradient(135deg, rgba(209, 250, 229, 0.4) 0%, rgba(255, 255, 255, 0.95) 100%)',
+          border: isPrivate ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
           boxShadow: 'var(--shadow-card)'
         }}
       >
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '24px' }}>🏢</span>
+            <span style={{ fontSize: '24px' }}>{isPrivate ? '🛡️' : '🌐'}</span>
             <h2 style={{ fontSize: '22px', color: 'var(--text-main)', fontWeight: 800 }}>
               {currentGroup.name === 'Shared Roommates Ledger' ? 'Shared Ledger' : currentGroup.name}
             </h2>
-            <span className="badge badge-neutral" style={{ fontSize: '11px' }}>
-              Group #{currentGroup.id}
+            <span className="badge badge-neutral mono" style={{ fontSize: '11px', fontWeight: 700 }}>
+              {currentGroup?.ledgerId || `#${currentGroup.id}`}
             </span>
-            <span className={`badge ${currentGroup?.isPrivate !== false ? 'badge-pending' : 'badge-approved'}`} style={{ fontSize: '11px' }}>
-              {currentGroup?.isPrivate !== false ? '🔒 Private Ledger' : '🌐 Public Ledger'}
+            <span 
+              className={`badge ${isPrivate ? 'badge-pending' : 'badge-approved'}`} 
+              style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700 }}
+            >
+              {isPrivate ? <Lock size={12} /> : <Globe size={12} />}
+              <span>{isPrivate ? 'Private Sovereign Vault (2FA)' : 'Open Community Transparency'}</span>
             </span>
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '14px', maxWidth: '640px', margin: 0 }}>
@@ -74,7 +98,33 @@ export default function DashboardOverview({
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+          {!isPrivate ? (
+            <button 
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleCopyAuditorLink}
+              title="Copy shareable read-only link for anyone in the community to audit this ledger"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid rgba(16, 185, 129, 0.35)', background: 'rgba(16, 185, 129, 0.08)', color: '#065F46', fontWeight: 700 }}
+            >
+              {copiedAuditLink ? <Check size={14} style={{ color: '#10B981' }} /> : <Share2 size={14} />}
+              <span>{copiedAuditLink ? 'Auditor Link Copied!' : 'Public Audit Link'}</span>
+            </button>
+          ) : (
+            onLockGroup && (
+              <button 
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => onLockGroup(currentGroup.id)}
+                title="Lock this private vault session immediately"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid rgba(245, 158, 11, 0.4)', color: '#92400E', fontWeight: 700 }}
+              >
+                <Lock size={13} style={{ color: 'var(--color-amber)' }} />
+                <span>Lock Vault</span>
+              </button>
+            )
+          )}
+
           <button 
             className="btn btn-secondary"
             onClick={onOpenConnectDevices || (() => onSwitchTab('group'))}
@@ -82,7 +132,7 @@ export default function DashboardOverview({
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <QrCode size={16} style={{ color: 'var(--color-primary-light)' }} />
-            <span>Invite & QR Code</span>
+            <span>Invite &amp; QR Code</span>
           </button>
           <button 
             className="btn btn-primary"
@@ -101,6 +151,56 @@ export default function DashboardOverview({
         </div>
       </div>
 
+      {/* Ledger Mode Architectural Feature Callout */}
+      <div 
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gap: '12px',
+          marginBottom: '20px',
+        }}
+      >
+        <div style={{
+          padding: '12px 16px',
+          borderRadius: 'var(--radius-md)',
+          background: 'var(--bg-surface)',
+          border: isPrivate ? '1px solid rgba(245, 158, 11, 0.25)' : '1px solid rgba(16, 185, 129, 0.25)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          fontSize: '12px'
+        }}>
+          {isPrivate ? <Lock size={16} style={{ color: 'var(--color-amber)', flexShrink: 0 }} /> : <Globe size={16} style={{ color: 'var(--color-emerald)', flexShrink: 0 }} />}
+          <div>
+            <strong style={{ color: 'var(--text-main)' }}>{isPrivate ? '2FA Vault Security:' : 'Open Transparency Mode:'}</strong>{' '}
+            <span style={{ color: 'var(--text-muted)' }}>
+              {isPrivate 
+                ? 'Only members with valid Ledger ID & Password can decrypt expenses and cast consensus votes.'
+                : 'Anyone on the network can freely inspect all transactions, IPFS receipts, and audit blocks.'}
+            </span>
+          </div>
+        </div>
+
+        <div style={{
+          padding: '12px 16px',
+          borderRadius: 'var(--radius-md)',
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          fontSize: '12px'
+        }}>
+          <ShieldCheck size={16} style={{ color: 'var(--color-primary-light)', flexShrink: 0 }} />
+          <div>
+            <strong style={{ color: 'var(--text-main)' }}>Cryptographic Guarantee:</strong>{' '}
+            <span style={{ color: 'var(--text-muted)' }}>
+              Zero-Sum balance invariant (Σ = ₹0.00) continuously authenticated on-chain.
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* KPI Cards Grid */}
       <div className="kpi-grid">
         {/* Total Volume */}
@@ -111,7 +211,7 @@ export default function DashboardOverview({
               <TrendingUp size={18} />
             </div>
           </div>
-          <div className="kpi-value">{formatCents(totalVolume)}</div>
+          <div className="kpi-value">{formatMaskedCents(totalVolume, isPrivacyMaskActive)}</div>
           <div className="kpi-subtext">{approvedExpenses.length} confirmed blockchain expenses</div>
         </div>
 
@@ -147,7 +247,7 @@ export default function DashboardOverview({
                 : 'balance-neutral'
             }`}
           >
-            {formatCents(userNetBalance)}
+            {formatMaskedCents(userNetBalance, isPrivacyMaskActive)}
           </div>
           <div className="kpi-subtext">
             {userNetBalance > 0 
@@ -269,7 +369,7 @@ export default function DashboardOverview({
                       color: isPositive ? 'var(--color-emerald-light)' : isNegative ? 'var(--color-rose)' : 'var(--text-muted)'
                     }}
                   >
-                    {formatCents(m.netBalance)}
+                    {formatMaskedCents(m.netBalance, isPrivacyMaskActive)}
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
                     {isPositive ? 'to receive' : isNegative ? 'to pay' : 'settled'}

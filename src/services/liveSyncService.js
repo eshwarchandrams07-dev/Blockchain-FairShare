@@ -20,6 +20,25 @@ class LiveSyncService {
 
     this.initBroadcastChannel();
     this.initWebSocket();
+    this.fetchServerCachedState();
+  }
+
+  fetchServerCachedState() {
+    if (typeof window === 'undefined') return;
+    try {
+      fetch('/api/ledger-state')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && data.state) {
+            this.handleIncomingMessage({
+              type: 'STATE_UPDATED',
+              state: data.state,
+              fromServerHttp: true,
+            }, 'HTTP_HYDRATION');
+          }
+        })
+        .catch(() => {});
+    } catch {}
   }
 
   initBroadcastChannel() {
@@ -130,6 +149,17 @@ class LiveSyncService {
       } catch (e) {
         console.warn('WebSocket send error:', e);
       }
+    }
+
+    // 3. Backup to server memory state endpoint
+    if (payload.type === 'STATE_UPDATED' && payload.state && typeof window !== 'undefined') {
+      try {
+        fetch('/api/ledger-state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).catch(() => {});
+      } catch {}
     }
   }
 
