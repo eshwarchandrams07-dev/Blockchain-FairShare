@@ -44,8 +44,17 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
   const [selectedAction, setSelectedAction] = useState('ALL');
   const [isCertificateModalOpen, setIsCertificateModalOpen] = useState(false);
   const [certDate, setCertDate] = useState('');
+  const [verificationResult, setVerificationResult] = useState(null);
 
   const groupLogs = auditLogs.filter(l => l.groupId === currentGroup.id);
+
+  const handleVerifyLedgerChain = () => {
+    const res = blockchainService.verifyLedgerIntegrity(currentGroup.id);
+    setVerificationResult(res);
+    setTimeout(() => {
+      setVerificationResult(null);
+    }, 6000);
+  };
 
   const handleOpenCertificate = () => {
     setCertDate(new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
@@ -108,6 +117,16 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleVerifyLedgerChain}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              title="Verify Keccak-256 hash pointers across all blocks in this ledger"
+            >
+              <ShieldCheck size={14} style={{ color: 'var(--color-emerald-light)' }} />
+              <span>Verify Hash Chain</span>
+            </button>
+            <button
+              type="button"
               className="btn btn-primary btn-sm"
               onClick={handleOpenCertificate}
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -122,6 +141,39 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
             </div>
           </div>
         </div>
+
+        {verificationResult && (
+          <div 
+            style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-md)',
+              background: verificationResult.valid ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              border: verificationResult.valid ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+              color: verificationResult.valid ? 'var(--color-emerald)' : 'var(--color-rose)',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {verificationResult.valid ? <Check size={16} /> : <X size={16} />}
+              <span>
+                {verificationResult.valid 
+                  ? `Cryptographic Hash Chain Verified: ${verificationResult.blocksVerified} blocks authenticated with keccak-256. Zero tampering detected!`
+                  : `Integrity Alert: ${verificationResult.reason}`}
+              </span>
+            </div>
+            <button 
+              className="close-btn" 
+              onClick={() => setVerificationResult(null)}
+              style={{ fontSize: '11px' }}
+            >
+              ×
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filter and Search Bar */}

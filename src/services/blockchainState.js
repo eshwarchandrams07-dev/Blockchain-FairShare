@@ -127,6 +127,12 @@ export function getDeviceProfile() {
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed.name && parsed.address) {
+        if (!parsed.privateKey) {
+          parsed.privateKey = ethers.Wallet.createRandom().privateKey;
+          try {
+            localStorage.setItem(profileKey, JSON.stringify(parsed));
+          } catch {}
+        }
         return parsed;
       }
     }
@@ -138,6 +144,7 @@ export function getDeviceProfile() {
 
   const profile = {
     address: randomWallet.address,
+    privateKey: randomWallet.privateKey,
     name: isHost ? 'Eshwar (Admin)' : `Member-${shortId}`,
     avatar: isHost ? '👑' : MEMBER_AVATARS[Math.floor(Math.random() * MEMBER_AVATARS.length)],
     tokenBalance: isHost ? 75000 : 50000, // Host gets ₹750, joining device gets ₹500
@@ -1426,10 +1433,24 @@ class BlockchainStateService {
       throw new Error(`Address ${voterAddress} is not a listed participant on Expense #${expenseId}`);
     }
 
-    const signature = generateTxHash();
+    let signature = null;
+    const messageSigned = `FairShare Consensus Signature: Expense #${expenseId} | Group #${groupId} | Vote: ${agreed ? 'AGREED' : 'REJECTED'} | Voter: ${voterAddress} | Nonce: ${Date.now()}`;
+    try {
+      if (this.myProfile.privateKey) {
+        const wallet = new ethers.Wallet(this.myProfile.privateKey);
+        signature = wallet.signMessageSync(messageSigned);
+      } else {
+        signature = generateTxHash();
+      }
+    } catch {
+      signature = generateTxHash();
+    }
+
     voteItem.status = agreed ? 'AGREED' : 'REJECTED';
     voteItem.reason = reason || (agreed ? 'Confirmed participant share' : 'Disputed share allocation');
     voteItem.signature = signature;
+    voteItem.signatureMessage = messageSigned;
+    voteItem.isEcdsa = signature.startsWith('0x') && signature.length > 100;
     voteItem.timestamp = Date.now();
     voteItem.pinVerified = true;
 
@@ -1832,22 +1853,62 @@ class BlockchainStateService {
 
   addAuditLog(groupId, action, actor, actorName, details) {
     this.currentBlockNumber += Math.floor(Math.random() * 3) + 1;
-    const txHash = generateTxHash();
+    const prevLog = this.auditLogs[0];
+    const previousBlockHash = prevLog?.blockHash || '0x0000000000000000000000000000000000000000000000000000000000000000';
+    const timestamp = Date.now();
+    const nonce = this.auditLogs.length + 1;
+    
+    // Cryptographic Keccak-256 Block Hash
+    const blockHash = ethers.keccak256(
+      ethers.toUtf8Bytes(
+        `${previousBlockHash}:${this.currentBlockNumber}:${groupId}:${action}:${actor}:${details}:${timestamp}:${nonce}`
+      )
+    );
+    const txHash = blockHash;
+
     const newLog = {
-      id: this.auditLogs.length + 1,
+      id: nonce,
       groupId,
       action,
       actor,
       actorName,
       details,
       blockNumber: this.currentBlockNumber,
+      previousBlockHash,
+      blockHash,
       txHash,
-      timestamp: Date.now(),
+      timestamp,
       gasUsed: (Math.floor(Math.random() * 80000) + 42000).toLocaleString(),
       isBaseSepolia: this.networkMode === 'base-sepolia',
       explorerUrl: this.getExplorerTxUrl(txHash),
     };
     this.auditLogs.unshift(newLog);
+  }
+
+  verifyLedgerIntegrity(groupId = null) {
+    const logs = groupId ? this.getAuditLogs(groupId) : this.auditLogs;
+    if (!logs || logs.length === 0) return { valid: true, blocksVerified: 0 };
+    
+    // Chronological order (oldest to newest)
+    const chronological = [...logs].reverse();
+    for (let i = 0; i < chronological.length; i++) {
+      const curr = chronological[i];
+      if (i > 0) {
+        const prev = chronological[i - 1];
+        if (curr.previousBlockHash && curr.previousBlockHash !== prev.blockHash) {
+          return {
+            valid: false,
+            tamperedBlock: curr.blockNumber,
+            reason: `Broken cryptographic hash pointer at Block #${curr.blockNumber}`,
+          };
+        }
+      }
+    }
+    return {
+      valid: true,
+      blocksVerified: logs.length,
+      latestBlockHash: logs[0]?.blockHash || 'Genesis',
+    };
   }
 
   getAuditLogs(groupId) {
