@@ -36,25 +36,37 @@ export default function ConnectDevicesModal({
   // Compute origin and mobile URL
   const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
   const isLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1';
-  const [lanIp, setLanIp] = useState(isLocalhost ? '' : currentHost);
-  const hasFetchedIp = React.useRef(false);
+  const [lanIp, setLanIp] = useState(() => {
+    const saved = getSavedLanIp();
+    if (saved && saved !== 'localhost' && saved !== '127.0.0.1') return saved;
+    return isLocalhost ? '' : currentHost;
+  });
 
-  // Auto-detect LAN IP when modal opens
+  // Auto-detect LAN IP whenever modal opens
   useEffect(() => {
-    if (isOpen && isLocalhost && !hasFetchedIp.current) {
-      hasFetchedIp.current = true;
+    if (isOpen) {
       fetchDetectedLanIp().then(ip => {
         if (ip && ip !== 'localhost') {
           setLanIp(ip);
         }
       });
     }
-  }, [isOpen, isLocalhost]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleIpChanged = (e) => {
+      if (e.detail && e.detail !== 'localhost') {
+        setLanIp(e.detail);
+      }
+    };
+    window.addEventListener('fairshare_lan_ip_changed', handleIpChanged);
+    return () => window.removeEventListener('fairshare_lan_ip_changed', handleIpChanged);
+  }, []);
 
   if (!isOpen) return null;
 
   const isPrivate = currentGroup?.isPrivate !== false;
-  const ledgerId = currentGroup?.ledgerId || 'APT-402';
+  const ledgerId = currentGroup?.ledgerId || (currentGroup?.id === 1 ? 'PUB-101' : 'APT-402');
   const password = currentGroup?.password || currentGroup?.inviteCode || inviteCode || 'FS-4020';
 
   const effectiveHost = getEffectiveHost(lanIp);

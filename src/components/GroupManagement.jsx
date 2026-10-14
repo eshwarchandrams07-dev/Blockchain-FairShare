@@ -55,15 +55,20 @@ export default function GroupManagement({
 
   useEffect(() => {
     fetchDetectedLanIp().then(ip => {
-      if (ip) setLanIp(ip);
+      if (ip && ip !== 'localhost') setLanIp(ip);
     });
+    const handleIpChanged = (e) => {
+      if (e.detail && e.detail !== 'localhost') setLanIp(e.detail);
+    };
+    window.addEventListener('fairshare_lan_ip_changed', handleIpChanged);
+    return () => window.removeEventListener('fairshare_lan_ip_changed', handleIpChanged);
   }, []);
 
   const currentMember = (currentGroup.members || []).find(m => m.address.toLowerCase() === currentAccount.toLowerCase());
   const isAdmin = currentMember?.role === 'ADMIN' || (currentGroup.members || []).length <= 1;
 
   const isGroupPrivate = currentGroup.isPrivate !== false;
-  const currentLedgerId = currentGroup.ledgerId || (currentGroup.id === 1 ? 'APT-402' : `GRP-${currentGroup.id}`);
+  const currentLedgerId = currentGroup.ledgerId || (currentGroup.id === 1 ? 'PUB-101' : `GRP-${currentGroup.id}`);
   const currentPassword = currentGroup.password || currentGroup.inviteCode || 'FS-4020';
 
   // Invite URL and QR computation (dynamic for local or deployed domain)

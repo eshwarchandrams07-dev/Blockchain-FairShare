@@ -20,6 +20,7 @@ import PrivateGroupGate from './components/PrivateGroupGate';
 import EnterLedgerModal from './components/EnterLedgerModal';
 import CreateGroupModal from './components/CreateGroupModal';
 import DeviceUserBanner from './components/DeviceUserBanner';
+import LoginPage from './components/LoginPage';
 import Toast from './components/Toast';
 import confetti from 'canvas-confetti';
 import { 
@@ -37,11 +38,13 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { blockchainService } from './services/blockchainState';
+import { authService } from './services/authService';
 import { ipfsService } from './services/ipfsService';
 import { liveSync } from './services/liveSyncService';
 import { formatCents, shortenAddress } from './utils/cryptoUtils';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState(() => authService.getCurrentUser());
   const [currentAccount, setCurrentAccount] = useState(blockchainService.getCurrentAccount());
   const [activeTab, setActiveTab] = useState('overview'); // overview, expenses, consensus, settlements, audit, verifier, group
   const [toasts, setToasts] = useState([]);
@@ -250,6 +253,21 @@ export default function App() {
   );
 
   // Handlers
+  const handleLoginSuccess = (user) => {
+    blockchainService.setLoggedInUser(user);
+    setCurrentUser(user);
+    setCurrentAccount(user.address);
+    addToast('Welcome to FairShare!', `Signed in as ${user.name} (${user.email || 'Google User'})`, 'success');
+    confetti({ particleCount: 70, spread: 60, origin: { y: 0.85 } });
+  };
+
+  const handleLogout = () => {
+    blockchainService.logout();
+    authService.logout();
+    setCurrentUser(null);
+    addToast('Signed Out', 'You have been signed out. Please sign in with Google to continue.', 'info');
+  };
+
   const handleUpdateDeviceName = (newName) => {
     blockchainService.updateProfile({ name: newName });
     addToast('User Name Updated', `Changed device name to "${newName}"`, 'success');
@@ -390,12 +408,23 @@ export default function App() {
 
   const pendingBlocksCount = expenses.filter(e => e.groupId === currentGroup.id && e.status === 0).length;
 
+  if (!currentUser) {
+    return (
+      <div className="app-container">
+        <LoginPage onLoginSuccess={handleLoginSuccess} />
+        <Toast toasts={toasts} onDismiss={removeToast} />
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       {/* Navigation Header */}
       <Navbar
         currentAccount={currentAccount}
         activePersona={activePersona}
+        currentUser={currentUser}
+        onLogout={handleLogout}
         onClaimFaucet={handleClaimFaucet}
         onConnectMetaMask={handleConnectMetaMask}
         isMetaMaskConnected={blockchainService.isMetaMaskConnected}
@@ -416,7 +445,7 @@ export default function App() {
         onTogglePrivacyMask={handleTogglePrivacyMask}
         onResetShowcase={() => {
           blockchainService.resetToDefaults();
-          addToast('Public Ledger Reset', 'Initialized 1 Public Ledger with 0 initial users. Ready for multi-device connections!', 'success');
+          addToast('Public Ledger Reset', 'Initialized clean Public Ledger with this device as initial user. Ready for multi-device sync!', 'success');
         }}
       />
 
@@ -494,13 +523,15 @@ export default function App() {
           </div>
         )}
 
-        {/* Device User Identity & 1 User Per Device Control */}
+        {/* Device User Identity & Google Account Banner */}
         <DeviceUserBanner
           profile={myProfile}
+          currentUser={currentUser}
           isJoined={isDeviceJoined}
           onJoinAndContinue={handleJoinAndContinue}
           onUpdateName={handleUpdateDeviceName}
           onOpenProfileModal={() => setIsProfileModalOpen(true)}
+          onSwitchAccount={handleLogout}
           memberCount={currentGroup?.members?.length || 0}
         />
 
@@ -806,9 +837,11 @@ export default function App() {
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
         currentProfile={activePersona}
+        currentUser={currentUser}
         onSaveProfile={handleSaveProfile}
         onConnectMetaMask={handleConnectMetaMask}
         isMetaMaskConnected={blockchainService.isMetaMaskConnected}
+        onLogout={handleLogout}
       />
 
       {/* Multi-Device Connection Modal */}

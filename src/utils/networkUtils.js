@@ -25,6 +25,16 @@ export function saveLanIp(ip) {
   } catch {}
 }
 
+// Eagerly pre-populate cached LAN IP on module load
+if (typeof window !== 'undefined') {
+  const saved = getSavedLanIp();
+  if (saved && saved !== 'localhost' && saved !== '127.0.0.1') {
+    cachedLanIp = saved;
+  }
+  // Immediately query LAN IP endpoint
+  fetchDetectedLanIp().catch(() => {});
+}
+
 export async function fetchDetectedLanIp() {
   if (typeof window === 'undefined') return 'localhost';
   const currentHost = window.location.hostname;
@@ -32,6 +42,7 @@ export async function fetchDetectedLanIp() {
   // If user already loaded the app via an external IP or domain (e.g. 192.168.1.10 or Vercel),
   // use that hostname directly!
   if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+    cachedLanIp = currentHost;
     return currentHost;
   }
 
@@ -39,7 +50,6 @@ export async function fetchDetectedLanIp() {
   const saved = getSavedLanIp();
   if (saved && saved !== 'localhost' && saved !== '127.0.0.1') {
     cachedLanIp = saved;
-    return saved;
   }
 
   // Query server to get actual LAN IP of this host machine
@@ -57,7 +67,7 @@ export async function fetchDetectedLanIp() {
     console.warn('Could not query LAN IP endpoint:', err);
   }
 
-  return saved || 'localhost';
+  return cachedLanIp || saved || 'localhost';
 }
 
 export function getEffectiveHost(customIp = null) {
