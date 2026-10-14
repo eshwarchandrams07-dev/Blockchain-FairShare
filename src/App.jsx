@@ -542,17 +542,19 @@ export default function App() {
           </div>
         )}
 
-        {/* Device User Identity & Google Account Banner */}
-        <DeviceUserBanner
-          profile={myProfile}
-          currentUser={currentUser}
-          isJoined={isDeviceJoined}
-          onJoinAndContinue={handleJoinAndContinue}
-          onUpdateName={handleUpdateDeviceName}
-          onOpenProfileModal={() => setIsProfileModalOpen(true)}
-          onSwitchAccount={handleLogout}
-          memberCount={currentGroup?.members?.length || 0}
-        />
+        {/* If user is not yet joined to this group ledger, prompt to join with 1 tap */}
+        {!isDeviceJoined && (
+          <DeviceUserBanner
+            profile={myProfile}
+            currentUser={currentUser}
+            isJoined={isDeviceJoined}
+            onJoinAndContinue={handleJoinAndContinue}
+            onUpdateName={handleUpdateDeviceName}
+            onOpenProfileModal={() => setIsProfileModalOpen(true)}
+            onSwitchAccount={handleLogout}
+            memberCount={currentGroup?.members?.length || 0}
+          />
+        )}
 
         {/* Navigation Tabs Bar */}
         <div className="tabs-bar">

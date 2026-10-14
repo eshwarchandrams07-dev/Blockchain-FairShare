@@ -1,27 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Coins, 
-  Wallet, 
-  Sparkles, 
-  ArrowRightLeft, 
   KeyRound, 
-  User,
-  Smartphone,
-  HardDrive,
-  Globe,
-  RotateCcw,
-  Cpu,
-  Lock,
-  ChevronDown,
-  Check,
-  Plus,
-  Eye,
-  EyeOff,
-  LogOut
+  Globe, 
+  Lock, 
+  ChevronDown, 
+  Check, 
+  Plus, 
+  LogOut, 
+  Settings, 
+  Copy, 
+  Coins, 
+  Eye, 
+  EyeOff, 
+  Smartphone, 
+  Cpu, 
+  HardDrive, 
+  RotateCcw, 
+  Sparkles,
+  ArrowRightLeft,
+  Wallet
 } from 'lucide-react';
 import { shortenAddress, formatMaskedCents } from '../utils/cryptoUtils';
 import { blockchainService } from '../services/blockchainState';
-import { ipfsService } from '../services/ipfsService';
 
 export default function Navbar({ 
   currentAccount, 
@@ -49,117 +49,140 @@ export default function Navbar({
   onTogglePrivacyMask,
 }) {
   const [isLedgerMenuOpen, setIsLedgerMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
+
   const ledgerDropdownRef = useRef(null);
+  const userDropdownRef = useRef(null);
+  const toolsDropdownRef = useRef(null);
 
-  const networkMode = blockchainService.getNetworkMode();
-  const isBaseSepolia = networkMode === 'base-sepolia';
-  const hasPinataJwt = Boolean(ipfsService.getPinataJwt());
   const isPrivate = currentGroup?.isPrivate !== false;
+  const isBaseSepolia = blockchainService.getNetworkMode() === 'base-sepolia';
 
-  // Close dropdown on click outside
+  // Close dropdowns on click outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (ledgerDropdownRef.current && !ledgerDropdownRef.current.contains(e.target)) {
         setIsLedgerMenuOpen(false);
+      }
+      if (userDropdownRef.current && !userDropdownRef.current.contains(e.target)) {
+        setIsUserMenuOpen(false);
+      }
+      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(e.target)) {
+        setIsToolsMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleCopyAddress = (e) => {
+    e.stopPropagation();
+    if (currentAccount) {
+      navigator.clipboard.writeText(currentAccount);
+      setCopiedAddress(true);
+      setTimeout(() => setCopiedAddress(false), 2000);
+    }
+  };
+
   return (
-    <header className="navbar">
-      <div className="navbar-inner">
-        {/* Left Section: Brand & Quick-Switch Ledger Hub */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-          <div className="nav-brand">
-            <div className="brand-icon-box">
-              <ArrowRightLeft size={22} />
+    <header className="navbar" style={{ padding: '10px 24px', background: 'rgba(255, 255, 255, 0.95)', borderBottom: '1px solid #e2e8f0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', maxWidth: '1400px', margin: '0 auto', gap: '16px' }}>
+        
+        {/* LEFT: Clean Brand & Workspace Selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', cursor: 'default' }}>
+            <div style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              boxShadow: '0 4px 10px rgba(79, 70, 229, 0.25)'
+            }}>
+              <ArrowRightLeft size={18} />
             </div>
-            <div className="brand-text">
-              <h1>
+            <div>
+              <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.3px' }}>
                 FairShare
-                <span className="brand-tag">DECENTRALIZED</span>
-              </h1>
+              </span>
             </div>
           </div>
 
-          {/* Quick-Switch Ledger Hub */}
+          {/* Group / Ledger Selector Dropdown */}
           <div style={{ position: 'relative' }} ref={ledgerDropdownRef}>
             <button
               type="button"
-              onClick={() => setIsLedgerMenuOpen(!isLedgerMenuOpen)}
-              className="btn btn-secondary btn-sm"
-              title="Switch Active Ledger Workspace"
+              onClick={() => {
+                setIsLedgerMenuOpen(!isLedgerMenuOpen);
+                setIsUserMenuOpen(false);
+                setIsToolsMenuOpen(false);
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '6px 12px',
-                borderRadius: 'var(--radius-full)',
-                background: isPrivate ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.12)',
-                border: isPrivate ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid rgba(16, 185, 129, 0.35)',
-                color: isPrivate ? '#92400E' : '#065F46',
+                padding: '6px 14px',
+                borderRadius: '100px',
+                background: isPrivate ? '#fef3c7' : '#ecfdf5',
+                border: isPrivate ? '1px solid #fde68a' : '1px solid #a7f3d0',
+                color: isPrivate ? '#92400e' : '#065f46',
                 fontWeight: 700,
-                fontSize: '12px',
+                fontSize: '13px',
                 cursor: 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
-              {isPrivate ? (
-                <Lock size={13} style={{ color: '#D97706' }} />
-              ) : (
-                <Globe size={13} style={{ color: '#10B981' }} />
-              )}
-              <span style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {isPrivate ? <Lock size={13} style={{ color: '#d97706' }} /> : <Globe size={13} style={{ color: '#10b981' }} />}
+              <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {currentGroup?.name || 'Public Ledger'}
               </span>
-              <span 
-                className="mono" 
-                style={{ 
-                  fontSize: '10px', 
-                  padding: '1px 6px', 
-                  borderRadius: '4px',
-                  background: isPrivate ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-                  fontWeight: 800
-                }}
-              >
-                {currentGroup?.ledgerId || (isPrivate ? 'PVT' : 'PUB')}
+              <span style={{
+                fontSize: '10px',
+                padding: '1px 6px',
+                borderRadius: '4px',
+                background: isPrivate ? 'rgba(217, 119, 6, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                fontWeight: 800
+              }}>
+                {currentGroup?.ledgerId || (isPrivate ? 'PVT' : 'PUB-101')}
               </span>
               <ChevronDown 
                 size={13} 
                 style={{ 
-                  opacity: 0.7, 
                   transform: isLedgerMenuOpen ? 'rotate(180deg)' : 'none', 
-                  transition: 'transform 0.2s ease' 
+                  transition: 'transform 0.2s ease',
+                  opacity: 0.7
                 }} 
               />
             </button>
 
             {/* Dropdown Menu */}
             {isLedgerMenuOpen && (
-              <div 
-                className="glass-panel"
-                style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 8px)',
-                  left: 0,
-                  width: '320px',
-                  zIndex: 200,
-                  padding: '8px',
-                  borderRadius: 'var(--radius-lg)',
-                  border: '1px solid var(--border-medium)',
-                  boxShadow: '0 12px 32px rgba(0, 0, 0, 0.15)',
-                  background: 'var(--bg-surface)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px'
-                }}
-              >
-                <div style={{ padding: '6px 10px', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-dim)', borderBottom: '1px solid var(--border-subtle)', marginBottom: '4px' }}>
-                  Available Ledger Workspaces
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                left: 0,
+                width: '300px',
+                zIndex: 300,
+                padding: '8px',
+                borderRadius: '16px',
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <div style={{ padding: '6px 10px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8' }}>
+                  Switch Ledger
                 </div>
 
-                <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '3px' }}>
                   {groups.map(grp => {
                     const isGrpActive = Number(grp.id) === Number(currentGroup?.id);
                     const isGrpPrivate = grp.isPrivate !== false;
@@ -176,70 +199,30 @@ export default function Navbar({
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           padding: '8px 10px',
-                          borderRadius: 'var(--radius-md)',
-                          border: isGrpActive ? '1px solid var(--color-primary)' : '1px solid transparent',
-                          background: isGrpActive ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                          borderRadius: '8px',
+                          border: 'none',
+                          background: isGrpActive ? '#f1f5f9' : 'transparent',
                           cursor: 'pointer',
                           textAlign: 'left',
-                          width: '100%',
                           transition: 'background 0.15s ease'
                         }}
-                        onMouseEnter={e => { if (!isGrpActive) e.currentTarget.style.background = 'var(--bg-surface-elevated)'; }}
+                        onMouseEnter={e => { if (!isGrpActive) e.currentTarget.style.background = '#f8fafc'; }}
                         onMouseLeave={e => { if (!isGrpActive) e.currentTarget.style.background = 'transparent'; }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                          {isGrpPrivate ? (
-                            <Lock size={14} style={{ color: 'var(--color-amber)', flexShrink: 0 }} />
-                          ) : (
-                            <Globe size={14} style={{ color: 'var(--color-emerald-light)', flexShrink: 0 }} />
-                          )}
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: '13px', fontWeight: isGrpActive ? 800 : 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {grp.name}
-                            </div>
-                            <div className="mono" style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
-                              {grp.ledgerId || `GRP-${grp.id}`} • {(grp.members || []).length} users
-                            </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {isGrpPrivate ? <Lock size={12} style={{ color: '#d97706' }} /> : <Globe size={12} style={{ color: '#10b981' }} />}
+                          <div>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{grp.name}</div>
+                            <div style={{ fontSize: '10px', color: '#64748b' }}>{grp.ledgerId || `ID: ${grp.id}`}</div>
                           </div>
                         </div>
-
-                        {isGrpActive && (
-                          <Check size={14} style={{ color: 'var(--color-primary-light)', flexShrink: 0 }} />
-                        )}
+                        {isGrpActive && <Check size={14} style={{ color: '#4f46e5' }} />}
                       </button>
                     );
                   })}
                 </div>
 
-                <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '4px', paddingTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {onOpenEnterLedgerModal && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onOpenEnterLedgerModal();
-                        setIsLedgerMenuOpen(false);
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 10px',
-                        borderRadius: 'var(--radius-md)',
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--color-amber)',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(245, 158, 11, 0.1)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <KeyRound size={13} />
-                      <span>Enter Private Ledger (ID &amp; Passkey)</span>
-                    </button>
-                  )}
-
+                <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '4px', paddingTop: '6px' }}>
                   {onOpenCreateGroup && (
                     <button
                       type="button"
@@ -248,23 +231,24 @@ export default function Navbar({
                         setIsLedgerMenuOpen(false);
                       }}
                       style={{
+                        width: '100%',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 10px',
-                        borderRadius: 'var(--radius-md)',
+                        gap: '8px',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
                         border: 'none',
                         background: 'transparent',
-                        color: 'var(--color-primary-light)',
+                        color: '#4f46e5',
                         fontSize: '12px',
                         fontWeight: 700,
                         cursor: 'pointer'
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.1)'}
+                      onMouseEnter={e => e.currentTarget.style.background = '#eef2ff'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      <Plus size={13} />
-                      <span>Deploy New Ledger / Vault</span>
+                      <Plus size={14} />
+                      <span>Create New Ledger</span>
                     </button>
                   )}
                 </div>
@@ -273,337 +257,520 @@ export default function Navbar({
           </div>
         </div>
 
-        {/* Right Section */}
-        <div className="nav-right">
-          {/* Live Sync Status */}
-          <div 
-            className="sync-badge-live" 
-            title={
-              syncStatus === 'CONNECTED'
-                ? 'Multi-Device Live Sync active via WebSocket relay. Open on your phone on the same Wi-Fi to vote live!'
-                : 'Multi-Tab Sync active via BroadcastChannel. Open another browser tab/window to test real-time voting.'
-            }
-          >
-            <div 
-              className="sync-dot-pulse" 
-              style={{ background: syncStatus === 'CONNECTED' ? '#10b981' : '#06b6d4', boxShadow: `0 0 8px ${syncStatus === 'CONNECTED' ? '#10b981' : '#06b6d4'}` }}
-            ></div>
-            <span>{syncStatus === 'CONNECTED' ? 'Live Relay Sync' : 'Live Sync Active'}</span>
-          </div>
-
-          {/* Interactive Network Switcher (Sandbox vs Base Sepolia Live) */}
-          <button 
-            type="button"
-            className="network-switcher-btn"
-            onClick={onOpenNetworkModal}
-            title="Switch between Local Sandbox and Live Base Sepolia Testnet"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '12px',
-              fontWeight: 700,
-              padding: '6px 12px',
-              background: isBaseSepolia ? 'rgba(0, 82, 255, 0.12)' : 'rgba(21, 128, 61, 0.12)',
-              border: isBaseSepolia ? '1px solid rgba(0, 82, 255, 0.4)' : '1px solid rgba(21, 128, 61, 0.35)',
-              color: isBaseSepolia ? '#0045D8' : '#166534',
-              borderRadius: 'var(--radius-full)',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            <div 
-              className="network-dot" 
-              style={{ 
-                background: isBaseSepolia ? '#0052FF' : '#10b981',
-                boxShadow: isBaseSepolia ? '0 0 8px #0052FF' : '0 0 8px #10b981'
-              }}
-            ></div>
-            <span>{isBaseSepolia ? 'Base Sepolia Live' : 'EVM Sandbox (Base)'}</span>
-            <Globe size={13} style={{ opacity: 0.75, marginLeft: '2px' }} />
-          </button>
-
-          {/* IPFS Pinning Manager Button */}
+        {/* RIGHT: Clean Action Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          
+          {/* 1. Enter Private Ledger Button (Key Requirement) */}
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={onOpenIpfsModal}
-            title="Configure Real IPFS File Pinning (Pinata Cloud & CIDv1)"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: '1px solid var(--border-medium)',
-              background: hasPinataJwt ? 'rgba(16, 185, 129, 0.12)' : 'rgba(214, 204, 194, 0.45)',
-              color: hasPinataJwt ? '#065F46' : 'var(--text-main)',
-              fontWeight: 700,
-            }}
-          >
-            <HardDrive size={14} style={{ color: hasPinataJwt ? '#10B981' : '#0E7490' }} />
-            <span>{hasPinataJwt ? 'IPFS: Pinata Live' : 'IPFS Pinning'}</span>
-          </button>
-
-          {/* Multi-Device Connect Button */}
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={onOpenConnectDevicesModal}
-            title="Connect mobile phones, tablets, or other laptops via Wi-Fi to join this ledger"
-            id="connect-devices-btn"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: '1px solid var(--border-medium)',
-              background: 'rgba(214, 204, 194, 0.45)',
-              color: 'var(--text-main)',
-              fontWeight: 700,
-            }}
-          >
-            <Smartphone size={14} style={{ color: '#0E7490' }} />
-            <span>Connect Devices</span>
-          </button>
-
-          {/* Enter Private Ledger with ID & Password */}
-          <button
-            className="btn btn-secondary btn-sm"
             onClick={onOpenEnterLedgerModal}
-            title="Enter any private ledger using its Ledger ID and Security Password"
-            id="enter-private-ledger-btn"
+            title="Enter private ledger with ID and Password"
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              border: '1px solid rgba(245, 158, 11, 0.4)',
-              background: 'rgba(245, 158, 11, 0.08)',
-              color: 'var(--text-main)',
+              padding: '7px 14px',
+              borderRadius: '10px',
+              border: '1px solid #f59e0b',
+              background: '#fffbeb',
+              color: '#b45309',
+              fontSize: '13px',
               fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
             }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#fef3c7'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fffbeb'; }}
           >
-            <KeyRound size={14} style={{ color: 'var(--color-amber)' }} />
+            <KeyRound size={14} style={{ color: '#d97706' }} />
             <span>Enter Private Ledger</span>
           </button>
 
-          {/* Architecture & Specs Button */}
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={onOpenArchitectureModal}
-            title="View 4-Tier Web3 Architecture, Invariants, and Gas Benchmarks"
-            id="architecture-specs-btn"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: '1px solid var(--border-medium)',
-              background: 'rgba(99, 102, 241, 0.1)',
-              color: 'var(--text-main)',
-              fontWeight: 700,
-            }}
-          >
-            <Cpu size={14} style={{ color: 'var(--color-primary-light)' }} />
-            <span>Architecture & Specs</span>
-          </button>
-
-          {/* Stealth / Privacy Mask Mode Toggle */}
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={onTogglePrivacyMask}
-            title={isPrivacyMaskActive ? "Stealth Mask is ON: Balances are hidden. Click to reveal." : "Enable Stealth Mask: Hide sensitive rupee amounts when screen-sharing or in public."}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: isPrivacyMaskActive ? '1px solid rgba(99, 102, 241, 0.45)' : '1px solid var(--border-medium)',
-              background: isPrivacyMaskActive ? 'rgba(99, 102, 241, 0.12)' : 'rgba(214, 204, 194, 0.45)',
-              color: isPrivacyMaskActive ? 'var(--color-primary-light)' : 'var(--text-main)',
-              fontWeight: 700,
-            }}
-          >
-            {isPrivacyMaskActive ? <EyeOff size={14} style={{ color: 'var(--color-primary-light)' }} /> : <Eye size={14} />}
-            <span>{isPrivacyMaskActive ? 'Stealth: ON' : 'Privacy Mask'}</span>
-          </button>
-
-          {/* Testnet Token Faucet */}
-          <button 
-            className="btn btn-secondary btn-sm"
-            onClick={onClaimFaucet}
-            title="Mint ₹500 FSINR testnet tokens for testing instant crypto settlements"
-          >
-            <Coins size={14} style={{ color: 'var(--color-amber)' }} />
-            <span>Faucet (+₹500 FSINR)</span>
-          </button>
-
-          {/* Public vs Private Ledger Status & Lock Control */}
-          {currentGroup?.isPrivate !== false ? (
-            isGroupUnlocked ? (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => onLockGroup && onLockGroup(currentGroup?.id)}
-                title="Lock this private ledger session with 2FA passkey protection"
-                style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
-              >
-                <Lock size={13} style={{ color: 'var(--color-amber)' }} />
-                <span>Lock Private Ledger</span>
-              </button>
-            ) : (
-              <span className="badge badge-pending" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Lock size={12} />
-                <span>Private Locked</span>
-              </span>
-            )
-          ) : (
-            <span 
-              className="badge badge-approved" 
-              style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
-              title="This is an open public ledger. Anyone can view and audit on-chain transactions without authentication."
-            >
-              <Globe size={12} />
-              <span>Public Ledger</span>
-            </span>
-          )}
-
-          {/* Reset Public Ledger button */}
-          <button 
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={onResetShowcase}
-            title="Reset to 1 clean Public Ledger with 0 initial users"
-            style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
-          >
-            <RotateCcw size={13} style={{ color: 'var(--color-primary-light)' }} />
-            <span>Reset Public Ledger</span>
-          </button>
-
-          {/* Active User Google Profile Card */}
-          <button 
-            className="btn btn-secondary btn-sm"
-            onClick={onOpenProfileModal}
-            title="Click to view your Google account, display name, avatar, or security PIN"
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px',
-              border: '1px solid var(--border-medium)',
-              background: 'var(--bg-surface-elevated)',
-              color: 'var(--text-main)',
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-md)',
-              cursor: 'pointer'
-            }}
-          >
-            <span style={{ fontSize: '16px' }}>{activePersona?.avatar || '👤'}</span>
-            <span style={{ fontWeight: 700 }}>{activePersona?.name || 'Google User'}</span>
-            {currentUser?.email ? (
-              <span 
-                className="badge" 
-                style={{ 
-                  fontSize: '9px', 
-                  padding: '1px 6px', 
-                  background: 'rgba(66, 133, 244, 0.12)', 
-                  color: '#1a73e8',
-                  border: '1px solid rgba(66, 133, 244, 0.3)',
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '3px'
-                }}
-              >
-                <svg width="8" height="8" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-                <span>Google</span>
-              </span>
-            ) : (
-              <span 
-                className="badge badge-approved" 
-                style={{ fontSize: '9px', padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.5px' }}
-              >
-                Active User
-              </span>
-            )}
-            <User size={13} style={{ opacity: 0.8 }} />
-          </button>
-
-          {/* Quick Switch / Sign Out Button */}
-          {onLogout && (
+          {/* 2. Tools & Settings Dropdown */}
+          <div style={{ position: 'relative' }} ref={toolsDropdownRef}>
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={onLogout}
-              title="Sign out or switch Google account"
+              onClick={() => {
+                setIsToolsMenuOpen(!isToolsMenuOpen);
+                setIsUserMenuOpen(false);
+                setIsLedgerMenuOpen(false);
+              }}
+              title="Tools, Network & Settings"
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '5px',
-                border: '1px solid rgba(220, 38, 38, 0.35)',
-                background: 'rgba(220, 38, 38, 0.08)',
-                color: '#dc2626',
+                gap: '6px',
+                padding: '7px 12px',
+                borderRadius: '10px',
+                border: '1px solid #e2e8f0',
+                background: '#ffffff',
+                color: '#475569',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; }}
+            >
+              <Settings size={14} />
+              <span>Tools</span>
+              <ChevronDown size={12} style={{ opacity: 0.6 }} />
+            </button>
+
+            {/* Tools Menu Content */}
+            {isToolsMenuOpen && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                right: 0,
+                width: '260px',
+                zIndex: 300,
+                padding: '8px',
+                borderRadius: '16px',
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px'
+              }}>
+                <div style={{ padding: '6px 10px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8' }}>
+                  Platform Tools &amp; Options
+                </div>
+
+                {/* Cloud Sync Status */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', fontSize: '12px', color: '#334155' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></div>
+                  <span>Sync: <strong>{syncStatus === 'CONNECTED' ? 'Live Cloud Sync' : 'Live Sync Active'}</strong></span>
+                </div>
+
+                {/* Connect Devices (QR) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenConnectDevicesModal();
+                    setIsToolsMenuOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '13px',
+                    color: '#1e293b',
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <Smartphone size={14} style={{ color: '#0ea5e9' }} />
+                  <span>Connect Phone / Devices</span>
+                </button>
+
+                {/* Privacy Mask */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onTogglePrivacyMask();
+                    setIsToolsMenuOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '13px',
+                    color: '#1e293b',
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  {isPrivacyMaskActive ? <EyeOff size={14} style={{ color: '#4f46e5' }} /> : <Eye size={14} />}
+                  <span>{isPrivacyMaskActive ? 'Disable Stealth Mask' : 'Enable Privacy Mask'}</span>
+                </button>
+
+                {/* Faucet */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClaimFaucet();
+                    setIsToolsMenuOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '13px',
+                    color: '#1e293b',
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <Coins size={14} style={{ color: '#f59e0b' }} />
+                  <span>Claim Testnet Tokens (+₹500)</span>
+                </button>
+
+                {/* Network Switcher */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenNetworkModal();
+                    setIsToolsMenuOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '13px',
+                    color: '#1e293b',
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <Globe size={14} style={{ color: '#10b981' }} />
+                  <span>Network: {isBaseSepolia ? 'Base Sepolia Live' : 'EVM Sandbox'}</span>
+                </button>
+
+                {/* IPFS Pinning */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenIpfsModal();
+                    setIsToolsMenuOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '13px',
+                    color: '#1e293b',
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <HardDrive size={14} style={{ color: '#0284c7' }} />
+                  <span>IPFS Storage Config</span>
+                </button>
+
+                {/* Architecture & Specs */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenArchitectureModal();
+                    setIsToolsMenuOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '13px',
+                    color: '#1e293b',
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <Cpu size={14} style={{ color: '#8b5cf6' }} />
+                  <span>Architecture &amp; Specs</span>
+                </button>
+
+                {/* Connect MetaMask if not connected */}
+                {!isMetaMaskConnected && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onConnectMetaMask();
+                      setIsToolsMenuOpen(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: 'transparent',
+                      fontSize: '13px',
+                      color: '#4f46e5',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'left'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#eef2ff'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <Sparkles size={14} />
+                    <span>Connect MetaMask</span>
+                  </button>
+                )}
+
+                {/* Reset Ledger */}
+                <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '4px', paddingTop: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onResetShowcase();
+                      setIsToolsMenuOpen(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: 'transparent',
+                      fontSize: '12px',
+                      color: '#64748b',
+                      cursor: 'pointer',
+                      textAlign: 'left'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <RotateCcw size={13} />
+                    <span>Reset Public Ledger Data</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. User Google Profile Card & Account Menu */}
+          <div style={{ position: 'relative' }} ref={userDropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setIsUserMenuOpen(!isUserMenuOpen);
+                setIsLedgerMenuOpen(false);
+                setIsToolsMenuOpen(false);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '5px 12px 5px 6px',
+                borderRadius: '100px',
+                border: '1px solid #e2e8f0',
+                background: '#ffffff',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#cbd5e1'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; }}
+            >
+              {/* Avatar circle */}
+              <div style={{
+                width: '30px',
+                height: '30px',
+                borderRadius: '50%',
+                background: '#f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '16px'
+              }}>
+                {activePersona?.avatar || '👤'}
+              </div>
+
+              {/* Name */}
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                {activePersona?.name || 'User'}
+              </span>
+
+              {/* Google Pill */}
+              <span style={{
+                fontSize: '10px',
+                padding: '2px 6px',
+                borderRadius: '10px',
+                background: 'rgba(66, 133, 244, 0.1)',
+                color: '#1a73e8',
                 fontWeight: 700,
-                padding: '6px 10px',
-                borderRadius: 'var(--radius-md)'
-              }}
-            >
-              <LogOut size={13} />
-              <span>Sign Out</span>
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px'
+              }}>
+                Google
+              </span>
+
+              <ChevronDown size={12} style={{ opacity: 0.6 }} />
             </button>
-          )}
 
-          {/* Wallet / MetaMask Connection */}
-          <div className="wallet-badge">
-            <Wallet size={15} style={{ color: 'var(--color-primary-light)' }} />
-            <span className="mono" style={{ fontWeight: 600 }}>
-              {shortenAddress(currentAccount)}
-            </span>
-            <span 
-              className="badge" 
-              style={{ 
-                background: 'rgba(56, 44, 38, 0.12)', 
-                color: 'var(--text-main)',
-                border: '1px solid var(--border-subtle)',
-                fontSize: '11px',
-                padding: '2px 8px',
-                fontWeight: 700
-              }}
-            >
-              {formatMaskedCents(activePersona?.tokenBalance || 0, isPrivacyMaskActive)} FSINR
-            </span>
+            {/* User Dropdown */}
+            {isUserMenuOpen && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                right: 0,
+                width: '280px',
+                zIndex: 300,
+                padding: '16px',
+                borderRadius: '20px',
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 12px 30px rgba(0, 0, 0, 0.12)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                {/* Header with avatar & email */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '50%',
+                    background: '#e0e7ff',
+                    color: '#4338ca',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px'
+                  }}>
+                    {activePersona?.avatar || '👤'}
+                  </div>
+                  <div style={{ overflow: 'hidden' }}>
+                    <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                      {activePersona?.name}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      {currentUser?.email || `${activePersona?.name?.toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Account Details Box */}
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  fontSize: '12px'
+                }}>
+                  {/* Address */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748b' }}>Wallet:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span className="mono" style={{ fontWeight: 600, color: '#0f172a' }}>
+                        {shortenAddress(currentAccount)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCopyAddress}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: copiedAddress ? '#10b981' : '#94a3b8' }}
+                        title="Copy address"
+                      >
+                        <Copy size={12} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Token Balance */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748b' }}>Balance:</span>
+                    <span style={{ fontWeight: 800, color: '#059669' }}>
+                      {formatMaskedCents(activePersona?.tokenBalance || 0, isPrivacyMaskActive)} FSINR
+                    </span>
+                  </div>
+
+                  {/* PIN */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748b' }}>Security PIN:</span>
+                    <span className="mono" style={{ fontWeight: 800, color: '#d97706', background: '#fef3c7', padding: '1px 6px', borderRadius: '4px' }}>
+                      {activePersona?.pin || '1234'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenProfileModal();
+                      setIsUserMenuOpen(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'center'
+                    }}
+                  >
+                    Edit Profile &amp; Avatar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      if (onLogout) onLogout();
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #fee2e2',
+                      background: '#fff1f2',
+                      color: '#e11d48',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <LogOut size={14} />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-
-          {/* Anti-Cheat Security PIN badge */}
-          <div 
-            className="badge badge-neutral mono" 
-            style={{ 
-              fontSize: '12px', 
-              background: 'rgba(180, 83, 9, 0.12)', 
-              border: '1px solid rgba(180, 83, 9, 0.35)', 
-              color: '#92400E', 
-              padding: '6px 10px', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '6px',
-              fontWeight: 700
-            }}
-            title="Your secret cryptographic signature PIN for agreeing or rejecting expenses on shared screens"
-          >
-            <KeyRound size={13} />
-            <span>PIN: {activePersona?.pin || '1234'}</span>
-          </div>
-
-          {!isMetaMaskConnected && (
-            <button 
-              className="btn btn-primary btn-sm"
-              onClick={onConnectMetaMask}
-              title="Connect external MetaMask extension"
-            >
-              <Sparkles size={14} />
-              <span>Connect Wallet</span>
-            </button>
-          )}
         </div>
       </div>
     </header>
