@@ -64,8 +64,8 @@ export default function GroupManagement({
     return () => window.removeEventListener('fairshare_lan_ip_changed', handleIpChanged);
   }, []);
 
-  const currentMember = (currentGroup.members || []).find(m => m.address.toLowerCase() === currentAccount.toLowerCase());
-  const isAdmin = currentMember?.role === 'ADMIN' || (currentGroup.members || []).length <= 1;
+  const currentMember = (currentGroup?.members || []).find(m => m && m.address && currentAccount && m.address.toLowerCase() === currentAccount.toLowerCase());
+  const isAdmin = currentMember?.role === 'ADMIN' || (currentGroup?.members || []).length <= 1;
 
   const isGroupPrivate = currentGroup.isPrivate !== false;
   const currentLedgerId = currentGroup.ledgerId || (currentGroup.id === 1 ? 'PUB-101' : `GRP-${currentGroup.id}`);
@@ -415,9 +415,9 @@ export default function GroupManagement({
               </p>
             </div>
           ) : (
-            currentGroup.members.map(m => {
-            const isUser = m.address.toLowerCase() === currentAccount.toLowerCase();
-            const balObj = groupBalances.find(b => b.address.toLowerCase() === m.address.toLowerCase());
+            (currentGroup?.members || []).filter(m => m && m.address).map(m => {
+            const isUser = Boolean(currentAccount && m.address.toLowerCase() === currentAccount.toLowerCase());
+            const balObj = (groupBalances || []).find(b => b && b.address && b.address.toLowerCase() === m.address.toLowerCase());
             const bal = balObj ? balObj.netBalance : 0;
             const isCopied = copiedAddress === m.address;
 

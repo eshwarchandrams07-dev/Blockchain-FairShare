@@ -22,7 +22,7 @@ export default function ConsensusHub({
     if (e.shares) {
       return e.shares.map(s => ({
         participant: s.participant,
-        status: s.participant.toLowerCase() === (e.payer || '').toLowerCase() ? 'AGREED' : 'PENDING',
+        status: (s.participant || '').toLowerCase() === (e.payer || '').toLowerCase() ? 'AGREED' : 'PENDING',
       }));
     }
     return [];
@@ -32,7 +32,7 @@ export default function ConsensusHub({
   const needsMySignature = groupExpenses.filter(e => {
     if (e.status !== 0) return false; // Not pending
     const votes = getExpenseVotes(e);
-    const myVote = votes.find(v => v.participant.toLowerCase() === currentAccount.toLowerCase());
+    const myVote = votes.find(v => (v?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase());
     return myVote && myVote.status === 'PENDING';
   });
 
@@ -40,7 +40,7 @@ export default function ConsensusHub({
     if (filter === 'ALL') return true;
     if (filter === 'NEED_MY_SIGNATURE') {
       const votes = getExpenseVotes(e);
-      const myVote = votes.find(v => v.participant.toLowerCase() === currentAccount.toLowerCase());
+      const myVote = votes.find(v => (v?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase());
       return e.status === 0 && myVote && myVote.status === 'PENDING';
     }
     if (filter === 'SEALED') return e.status === 1;

@@ -31,19 +31,19 @@ export default function DashboardOverview({
   const [copiedAuditLink, setCopiedAuditLink] = useState(false);
 
   // Calculate total approved volume
-  const approvedExpenses = expenses.filter(e => Number(e.groupId) === Number(currentGroup.id) && Number(e.status) === 1);
-  const totalVolume = approvedExpenses.reduce((sum, e) => sum + e.totalAmount, 0);
+  const approvedExpenses = (expenses || []).filter(e => e && Number(e.groupId) === Number(currentGroup?.id) && Number(e.status) === 1);
+  const totalVolume = approvedExpenses.reduce((sum, e) => sum + (e.totalAmount || 0), 0);
 
   // Find current user's balance
-  const userBalanceObj = groupBalances.find(b => b.address.toLowerCase() === currentAccount.toLowerCase());
-  const userNetBalance = userBalanceObj ? userBalanceObj.netBalance : 0;
+  const userBalanceObj = (groupBalances || []).find(b => b && b.address && currentAccount && b.address.toLowerCase() === currentAccount.toLowerCase());
+  const userNetBalance = userBalanceObj ? (userBalanceObj.netBalance || 0) : 0;
 
   // Counts
-  const pendingApprovalsCount = expenses.filter(e => Number(e.groupId) === Number(currentGroup.id) && Number(e.status) === 0).length;
-  const activeDisputesCount = expenses.filter(e => Number(e.groupId) === Number(currentGroup.id) && Number(e.status) === 3).length;
+  const pendingApprovalsCount = (expenses || []).filter(e => e && Number(e.groupId) === Number(currentGroup?.id) && Number(e.status) === 0).length;
+  const activeDisputesCount = (expenses || []).filter(e => e && Number(e.groupId) === Number(currentGroup?.id) && Number(e.status) === 3).length;
 
   // Check sum of balances equals 0
-  const totalBalanceSum = groupBalances.reduce((sum, b) => sum + b.netBalance, 0);
+  const totalBalanceSum = (groupBalances || []).reduce((sum, b) => sum + (b?.netBalance || 0), 0);
   const isIntegritySound = Math.abs(totalBalanceSum) <= 1; // within 1 cent rounding
   const isPrivate = currentGroup?.isPrivate !== false;
 
@@ -327,10 +327,10 @@ export default function DashboardOverview({
 
         {/* Member balances list */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
-          {groupBalances.map(m => {
-            const isUser = m.address.toLowerCase() === currentAccount.toLowerCase();
-            const isPositive = m.netBalance > 0;
-            const isNegative = m.netBalance < 0;
+          {(groupBalances || []).filter(m => m && m.address).map(m => {
+            const isUser = Boolean(currentAccount && m.address.toLowerCase() === currentAccount.toLowerCase());
+            const isPositive = (m.netBalance || 0) > 0;
+            const isNegative = (m.netBalance || 0) < 0;
 
             return (
               <div 

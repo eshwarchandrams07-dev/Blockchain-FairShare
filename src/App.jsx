@@ -240,32 +240,46 @@ export default function App() {
   }, []);
 
   // State queries
-  const groups = blockchainService.getGroups();
-  const currentGroup = blockchainService.getCurrentGroup();
-  const expenses = blockchainService.expenses;
-  const auditLogs = blockchainService.getAuditLogs(currentGroup.id);
-  const settlements = blockchainService.settlements;
-  const activePersona = blockchainService.getActivePersona();
-  const groupBalances = blockchainService.calculateGroupBalances(currentGroup.id);
-  const myProfile = blockchainService.getMyProfile();
-  const isDeviceJoined = currentGroup?.members?.some(
-    m => m.address.toLowerCase() === myProfile.address.toLowerCase()
-  );
+  const groups = blockchainService.getGroups() || [];
+  const currentGroup = blockchainService.getCurrentGroup() || { id: 1, name: 'Public Ledger', members: [] };
+  const expenses = blockchainService.expenses || [];
+  const auditLogs = blockchainService.getAuditLogs(currentGroup?.id || 1) || [];
+  const settlements = blockchainService.settlements || [];
+  const activePersona = blockchainService.getActivePersona() || {};
+  const groupBalances = blockchainService.calculateGroupBalances(currentGroup?.id || 1) || [];
+  const myProfile = blockchainService.getMyProfile() || {};
+  const isDeviceJoined = Boolean(currentGroup?.members?.some(
+    m => m && m.address && myProfile?.address && m.address.toLowerCase() === myProfile.address.toLowerCase()
+  ));
 
   // Handlers
   const handleLoginSuccess = (user) => {
-    blockchainService.setLoggedInUser(user);
-    setCurrentUser(user);
-    setCurrentAccount(user.address);
-    addToast('Welcome to FairShare!', `Signed in as ${user.name} (${user.email || 'Google User'})`, 'success');
-    confetti({ particleCount: 70, spread: 60, origin: { y: 0.85 } });
+    if (!user) return;
+    try {
+      blockchainService.setLoggedInUser(user);
+      setCurrentUser(user);
+      setCurrentAccount(user.address);
+      addToast('Welcome to FairShare!', `Signed in as ${user.name} (${user.email || 'Google User'})`, 'success');
+      try {
+        confetti({ particleCount: 70, spread: 60, origin: { y: 0.85 } });
+      } catch {}
+    } catch (err) {
+      console.error('Login state update error:', err);
+      setCurrentUser(user);
+      if (user.address) setCurrentAccount(user.address);
+    }
   };
 
   const handleLogout = () => {
-    blockchainService.logout();
-    authService.logout();
-    setCurrentUser(null);
-    addToast('Signed Out', 'You have been signed out. Please sign in with Google to continue.', 'info');
+    try {
+      blockchainService.logout();
+      authService.logout();
+      setCurrentUser(null);
+      addToast('Signed Out', 'You have been signed out. Please sign in with Google to continue.', 'info');
+    } catch (err) {
+      console.error('Logout error:', err);
+      setCurrentUser(null);
+    }
   };
 
   const handleUpdateDeviceName = (newName) => {
@@ -406,7 +420,7 @@ export default function App() {
     );
   };
 
-  const pendingBlocksCount = expenses.filter(e => e.groupId === currentGroup.id && e.status === 0).length;
+  const pendingBlocksCount = (expenses || []).filter(e => e && e.groupId === currentGroup?.id && e.status === 0).length;
 
   if (!currentUser) {
     return (
@@ -474,7 +488,7 @@ export default function App() {
                 className="btn btn-primary btn-sm"
                 onClick={() => {
                   const voter = liveVerificationNotice.expense.votes?.find(
-                    v => v.participant.toLowerCase() === currentAccount.toLowerCase()
+                    v => (v?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase()
                   ) || {
                     participant: currentAccount,
                     name: activePersona.name,
@@ -495,7 +509,7 @@ export default function App() {
                 className="btn btn-secondary btn-sm"
                 onClick={() => {
                   const voter = liveVerificationNotice.expense.votes?.find(
-                    v => v.participant.toLowerCase() === currentAccount.toLowerCase()
+                    v => (v?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase()
                   ) || {
                     participant: currentAccount,
                     name: activePersona.name,

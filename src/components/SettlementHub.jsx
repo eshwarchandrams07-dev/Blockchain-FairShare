@@ -90,7 +90,7 @@ export default function SettlementHub({
 
   const handleOpenUpi = (transfer) => {
     setActiveUpiModal(transfer);
-    const recipientMember = currentGroup.members?.find(m => m.address.toLowerCase() === transfer.to.toLowerCase());
+    const recipientMember = currentGroup?.members?.find(m => m && m.address && transfer?.to && m.address.toLowerCase() === transfer.to.toLowerCase());
     setCustomUpiInput(recipientMember?.upiId || '');
     setIsEditingUpi(false);
     setUtrInput('');
@@ -112,7 +112,7 @@ export default function SettlementHub({
   const handleConfirmUpiSubmit = (e) => {
     e.preventDefault();
     if (!activeUpiModal) return;
-    const recipientMember = currentGroup.members?.find(m => m.address.toLowerCase() === activeUpiModal.to.toLowerCase());
+    const recipientMember = currentGroup?.members?.find(m => m && m.address && activeUpiModal?.to && m.address.toLowerCase() === activeUpiModal.to.toLowerCase());
     const recipientUpi = (customUpiInput || recipientMember?.upiId || `${(activeUpiModal.toName || 'user').toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`).trim();
     const finalUtr = utrInput.trim() || `UTR-${Date.now().toString().slice(-8)}`;
 
@@ -292,8 +292,8 @@ export default function SettlementHub({
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '16px' }}>
               {currentTransfers.map((tr, idx) => {
-                const isUserDebtor = tr.from.toLowerCase() === currentAccount.toLowerCase();
-                const isUserCreditor = tr.to.toLowerCase() === currentAccount.toLowerCase();
+                const isUserDebtor = Boolean(tr?.from && currentAccount && tr.from.toLowerCase() === currentAccount.toLowerCase());
+                const isUserCreditor = Boolean(tr?.to && currentAccount && tr.to.toLowerCase() === currentAccount.toLowerCase());
 
                 return (
                   <div 
@@ -411,7 +411,7 @@ export default function SettlementHub({
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {groupSettlements.map((st) => {
-                const isRecipient = st.to.toLowerCase() === currentAccount.toLowerCase();
+                const isRecipient = Boolean(st?.to && currentAccount && st.to.toLowerCase() === currentAccount.toLowerCase());
                 const isPending = st.status === 'PENDING_CONFIRMATION';
                 const isConfirmed = st.status === 'CONFIRMED';
 
@@ -527,7 +527,7 @@ export default function SettlementHub({
 
       {/* Real-World UPI Direct Settlement Modal */}
       {activeUpiModal && (() => {
-        const recipientMember = currentGroup.members?.find(m => m.address.toLowerCase() === activeUpiModal.to.toLowerCase());
+        const recipientMember = currentGroup?.members?.find(m => m && m.address && activeUpiModal?.to && m.address.toLowerCase() === activeUpiModal.to.toLowerCase());
         const rawRecipientUpi = (customUpiInput || recipientMember?.upiId || `${(activeUpiModal.toName || 'user').toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`).trim();
         const isDemoUpi = isPlaceholderUpi(rawRecipientUpi);
         const isUpiValid = isValidUpiId(rawRecipientUpi);

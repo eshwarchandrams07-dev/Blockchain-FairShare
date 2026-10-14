@@ -272,6 +272,10 @@ class BlockchainStateService {
 
   mergeRemoteState(remoteState) {
     if (!remoteState || !Array.isArray(remoteState.groups)) return false;
+    if (!Array.isArray(this.groups)) this.groups = [];
+    if (!Array.isArray(this.expenses)) this.expenses = [];
+    if (!Array.isArray(this.settlements)) this.settlements = [];
+    if (!Array.isArray(this.auditLogs)) this.auditLogs = [];
 
     let hasLocalChanges = false;
     let hasRemoteAdditions = false;
@@ -449,16 +453,16 @@ class BlockchainStateService {
         const grp = this.groups.find(g => Number(g.id) === Number(data.groupId));
         if (grp && data.member && data.member.address) {
           if (!Array.isArray(grp.members)) grp.members = [];
-          const exists = grp.members.some(m => m.address.toLowerCase() === data.member.address.toLowerCase());
+          const exists = grp.members.some(m => m && m.address && m.address.toLowerCase() === data.member.address.toLowerCase());
           if (!exists) {
             grp.members.push(data.member);
             this.saveState(false);
           }
         }
-      } else if (data.type === 'PROFILE_UPDATED') {
+      } else if (data.type === 'PROFILE_UPDATED' && data.profile && data.profile.address) {
         this.groups.forEach(grp => {
           if (!Array.isArray(grp.members)) return;
-          const m = grp.members.find(mem => mem.address.toLowerCase() === data.profile.address.toLowerCase());
+          const m = grp.members.find(mem => mem && mem.address && mem.address.toLowerCase() === data.profile.address.toLowerCase());
           if (m) {
             m.name = data.profile.name;
             m.avatar = data.profile.avatar;
@@ -469,10 +473,10 @@ class BlockchainStateService {
           }
         });
         this.saveState(false);
-      } else if (data.type === 'MEMBER_UPI_UPDATED') {
+      } else if (data.type === 'MEMBER_UPI_UPDATED' && data.address) {
         const grp = this.groups.find(g => Number(g.id) === Number(data.groupId));
         if (grp && Array.isArray(grp.members)) {
-          const m = grp.members.find(mem => mem.address.toLowerCase() === data.address.toLowerCase());
+          const m = grp.members.find(mem => mem && mem.address && mem.address.toLowerCase() === data.address.toLowerCase());
           if (m) {
             m.upiId = data.upiId;
             this.saveState(false);
@@ -501,10 +505,10 @@ class BlockchainStateService {
       const stored = localStorage.getItem(this.storageKey);
       if (stored) {
         const parsed = JSON.parse(stored);
-        this.groups = parsed.groups || [];
-        this.expenses = parsed.expenses || [];
-        this.auditLogs = parsed.auditLogs || [];
-        this.settlements = parsed.settlements || [];
+        this.groups = Array.isArray(parsed.groups) ? parsed.groups : [];
+        this.expenses = Array.isArray(parsed.expenses) ? parsed.expenses : [];
+        this.auditLogs = Array.isArray(parsed.auditLogs) ? parsed.auditLogs : [];
+        this.settlements = Array.isArray(parsed.settlements) ? parsed.settlements : [];
         this.currentGroupId = parsed.currentGroupId || 1;
         this.currentBlockNumber = parsed.currentBlockNumber || 19843600;
 
@@ -581,17 +585,22 @@ class BlockchainStateService {
 
   isDeviceUserInActiveGroup() {
     const activeGroup = this.getCurrentGroup();
-    if (!activeGroup || !activeGroup.members) return false;
+    if (!activeGroup || !Array.isArray(activeGroup.members)) return false;
+    const myAddr = (this.myProfile?.address || '').toLowerCase();
+    if (!myAddr) return false;
     return activeGroup.members.some(
-      m => m.address.toLowerCase() === this.myProfile.address.toLowerCase()
+      m => m && m.address && m.address.toLowerCase() === myAddr
     );
   }
 
   joinActiveGroupAsDeviceUser() {
     const activeGroup = this.getCurrentGroup() || (this.groups && this.groups[0]);
     if (!activeGroup) return null;
+    if (!Array.isArray(activeGroup.members)) activeGroup.members = [];
+    const myAddr = (this.myProfile?.address || '').toLowerCase();
+    if (!myAddr) return null;
     const exists = activeGroup.members.some(
-      m => m.address.toLowerCase() === this.myProfile.address.toLowerCase()
+      m => m && m.address && m.address.toLowerCase() === myAddr
     );
     if (!exists) {
       const newMember = {
@@ -789,8 +798,9 @@ class BlockchainStateService {
     } catch {}
 
     // Update in all groups
+    const myAddr = (this.myProfile?.address || '').toLowerCase();
     this.groups.forEach(grp => {
-      const m = grp.members.find(mem => mem.address.toLowerCase() === this.myProfile.address.toLowerCase());
+      const m = (grp?.members || []).find(mem => mem && mem.address && mem.address.toLowerCase() === myAddr);
       if (m) {
         if (name !== undefined) m.name = name;
         if (avatar !== undefined) m.avatar = avatar;
@@ -803,16 +813,16 @@ class BlockchainStateService {
 
     // Also update in all expenses where this member is payer or participant
     this.expenses.forEach(exp => {
-      if (exp.paidBy?.toLowerCase() === this.myProfile.address.toLowerCase() && name) {
+      if ((exp.paidBy || '').toLowerCase() === myAddr && name) {
         exp.paidByName = name;
       }
       exp.participants?.forEach(pt => {
-        if (pt.address?.toLowerCase() === this.myProfile.address.toLowerCase() && name) {
+        if ((pt?.address || '').toLowerCase() === myAddr && name) {
           pt.name = name;
         }
       });
       exp.signatures?.forEach(sig => {
-        if (sig.voter?.toLowerCase() === this.myProfile.address.toLowerCase() && name) {
+        if ((sig?.voter || '').toLowerCase() === myAddr && name) {
           sig.voterName = name;
         }
       });
@@ -828,10 +838,11 @@ class BlockchainStateService {
   }
 
   updateMemberUpi(groupId, memberAddress, upiId) {
+    if (!memberAddress) return;
     const cleanUpi = (upiId || '').trim();
-    const grp = this.groups.find(g => Number(g.id) === Number(groupId));
-    if (grp) {
-      const m = grp.members.find(mem => mem.address.toLowerCase() === memberAddress.toLowerCase());
+    const grp = (this.groups || []).find(g => Number(g.id) === Number(groupId));
+    if (grp && Array.isArray(grp.members)) {
+      const m = grp.members.find(mem => mem && mem.address && mem.address.toLowerCase() === memberAddress.toLowerCase());
       if (m) {
         m.upiId = cleanUpi;
         this.saveState();
@@ -844,7 +855,7 @@ class BlockchainStateService {
       }
     }
 
-    if (memberAddress.toLowerCase() === this.currentAccount.toLowerCase()) {
+    if (this.currentAccount && memberAddress.toLowerCase() === this.currentAccount.toLowerCase()) {
       this.myProfile.upiId = cleanUpi;
       try {
         localStorage.setItem('fairshare_device_profile_v2', JSON.stringify(this.myProfile));
@@ -867,11 +878,12 @@ class BlockchainStateService {
           } catch {}
 
           // Update member address in all groups
-          this.groups.forEach(grp => {
-            const m = grp.members.find(mem => mem.address.toLowerCase() === oldAddr.toLowerCase());
+          (this.groups || []).forEach(grp => {
+            if (!Array.isArray(grp.members)) return;
+            const m = oldAddr ? grp.members.find(mem => mem && mem.address && mem.address.toLowerCase() === oldAddr.toLowerCase()) : null;
             if (m) {
               m.address = accounts[0];
-            } else if (!grp.members.some(mem => mem.address.toLowerCase() === accounts[0].toLowerCase())) {
+            } else if (!grp.members.some(mem => mem && mem.address && mem.address.toLowerCase() === accounts[0].toLowerCase())) {
               grp.members.push({
                 address: accounts[0],
                 name: this.myProfile.name,
@@ -1367,7 +1379,8 @@ class BlockchainStateService {
   ensureMemberInGroup(grp) {
     if (!grp) return;
     if (!Array.isArray(grp.members)) grp.members = [];
-    if (!grp.members.some(m => m.address && m.address.toLowerCase() === this.myProfile.address.toLowerCase())) {
+    const myAddr = (this.myProfile?.address || '').toLowerCase();
+    if (myAddr && !grp.members.some(m => m && m.address && m.address.toLowerCase() === myAddr)) {
       const isFirst = grp.members.length === 0;
       const newMember = {
         address: this.myProfile.address,
@@ -1390,10 +1403,12 @@ class BlockchainStateService {
   }
 
   addMemberToGroup(groupId, memberAddress, memberName, role = 'MEMBER') {
+    if (!memberAddress) throw new Error('Member address is required');
     const group = this.groups.find(g => g.id === groupId);
     if (!group) throw new Error('Group not found');
+    if (!Array.isArray(group.members)) group.members = [];
 
-    if (group.members.some(m => m.address.toLowerCase() === memberAddress.toLowerCase())) {
+    if (group.members.some(m => m && m.address && m.address.toLowerCase() === memberAddress.toLowerCase())) {
       throw new Error('Member already exists in this group');
     }
 
@@ -1432,24 +1447,26 @@ class BlockchainStateService {
 
   calculateGroupBalances(groupId) {
     const numId = Number(groupId);
-    const group = this.groups.find(g => Number(g.id) === numId);
-    if (!group || !group.members) return [];
+    const group = (this.groups || []).find(g => Number(g.id) === numId);
+    if (!group || !Array.isArray(group.members)) return [];
 
     const balances = {};
     (group.members || []).forEach(m => {
-      balances[m.address.toLowerCase()] = 0;
+      if (m && m.address) {
+        balances[m.address.toLowerCase()] = 0;
+      }
     });
 
     // Process Approved Expenses
-    const groupExpenses = this.expenses.filter(e => Number(e.groupId) === numId && Number(e.status) === EXPENSE_STATUS.APPROVED);
+    const groupExpenses = (this.expenses || []).filter(e => e && Number(e.groupId) === numId && Number(e.status) === EXPENSE_STATUS.APPROVED);
 
     for (const exp of groupExpenses) {
       const payerAddr = (exp.payer || '').toLowerCase();
       for (const share of (exp.shares || [])) {
         const participantAddr = (share.participant || '').toLowerCase();
-        const amt = Number(share.amount);
+        const amt = Number(share.amount) || 0;
 
-        if (participantAddr !== payerAddr) {
+        if (participantAddr && payerAddr && participantAddr !== payerAddr) {
           balances[participantAddr] = (balances[participantAddr] || 0) - amt;
           balances[payerAddr] = (balances[payerAddr] || 0) + amt;
         }
@@ -1457,26 +1474,30 @@ class BlockchainStateService {
     }
 
     // Process Confirmed Settlements
-    const groupSettlements = this.settlements.filter(s => Number(s.groupId) === numId && s.status === 'CONFIRMED');
+    const groupSettlements = (this.settlements || []).filter(s => s && Number(s.groupId) === numId && s.status === 'CONFIRMED');
 
     for (const st of groupSettlements) {
       const fromAddr = (st.from || '').toLowerCase();
       const toAddr = (st.to || '').toLowerCase();
-      const amt = Number(st.amount);
+      const amt = Number(st.amount) || 0;
 
-      balances[fromAddr] = (balances[fromAddr] || 0) + amt;
-      balances[toAddr] = (balances[toAddr] || 0) - amt;
+      if (fromAddr && toAddr) {
+        balances[fromAddr] = (balances[fromAddr] || 0) + amt;
+        balances[toAddr] = (balances[toAddr] || 0) - amt;
+      }
     }
 
-    return group.members.map(m => ({
-      address: m.address,
-      name: m.name,
-      role: m.role,
-      avatar: m.avatar,
-      pin: m.pin,
-      upiId: m.upiId || `${m.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-      netBalance: balances[m.address.toLowerCase()] || 0,
-    }));
+    return (group.members || [])
+      .filter(m => m && m.address)
+      .map(m => ({
+        address: m.address,
+        name: m.name || 'Member',
+        role: m.role || 'MEMBER',
+        avatar: m.avatar || '👤',
+        pin: m.pin || '1234',
+        upiId: m.upiId || `${(m.name || 'user').toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
+        netBalance: balances[m.address.toLowerCase()] || 0,
+      }));
   }
 
   // --- EXPENSE ACTIONS ---

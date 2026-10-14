@@ -31,10 +31,25 @@ function getLocalLanIp() {
 let cachedLedgerState = null;
 
 function mergeLedgerStates(base, update) {
-  if (!base) return update;
+  if (!base) {
+    if (!update) return null;
+    return {
+      groups: Array.isArray(update.groups) ? update.groups : [],
+      expenses: Array.isArray(update.expenses) ? update.expenses : [],
+      settlements: Array.isArray(update.settlements) ? update.settlements : [],
+      auditLogs: Array.isArray(update.auditLogs) ? update.auditLogs : [],
+    };
+  }
   if (!update) return base;
 
-  const merged = { ...base, ...update };
+  const merged = {
+    ...base,
+    ...update,
+    groups: Array.isArray(update.groups) ? update.groups : (Array.isArray(base.groups) ? base.groups : []),
+    expenses: Array.isArray(update.expenses) ? update.expenses : (Array.isArray(base.expenses) ? base.expenses : []),
+    settlements: Array.isArray(update.settlements) ? update.settlements : (Array.isArray(base.settlements) ? base.settlements : []),
+    auditLogs: Array.isArray(update.auditLogs) ? update.auditLogs : (Array.isArray(base.auditLogs) ? base.auditLogs : []),
+  };
 
   // Merge groups and members by address
   if (Array.isArray(base.groups) && Array.isArray(update.groups)) {

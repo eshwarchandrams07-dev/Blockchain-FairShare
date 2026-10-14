@@ -60,7 +60,7 @@ export default function ExpenseList({
   const pendingCount = groupExpenses.filter(e => e.status === EXPENSE_STATUS.PENDING_APPROVAL).length;
   const disputedCount = groupExpenses.filter(e => e.status === EXPENSE_STATUS.DISPUTED).length;
 
-  const currentMember = currentGroup.members.find(m => m.address.toLowerCase() === currentAccount.toLowerCase());
+  const currentMember = (currentGroup?.members || []).find(m => m && m.address && currentAccount && m.address.toLowerCase() === currentAccount.toLowerCase());
   const isAdmin = currentMember?.role === 'ADMIN';
 
   return (
@@ -124,13 +124,13 @@ export default function ExpenseList({
         </div>
       ) : (
         displayedExpenses.map(exp => {
-          const isPayer = exp.payer.toLowerCase() === currentAccount.toLowerCase();
+          const isPayer = (exp.payer || '').toLowerCase() === (currentAccount || '').toLowerCase();
           const isPending = exp.status === EXPENSE_STATUS.PENDING_APPROVAL;
           const isApproved = exp.status === EXPENSE_STATUS.APPROVED;
           const isDisputed = exp.status === EXPENSE_STATUS.DISPUTED;
           const isCorrected = exp.status === EXPENSE_STATUS.CORRECTED;
-          const myVote = exp.votes?.find(v => v.participant.toLowerCase() === currentAccount.toLowerCase());
-          const myShare = exp.shares?.find(s => s.participant.toLowerCase() === currentAccount.toLowerCase());
+          const myVote = exp.votes?.find(v => (v?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase());
+          const myShare = exp.shares?.find(s => (s?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase());
           const canVote = isPending && myShare && (!myVote || myVote.status === 'PENDING');
 
           // Status Badge Class
@@ -183,8 +183,8 @@ export default function ExpenseList({
 
               {/* Shares Breakdown */}
               <div className="expense-shares-list">
-                {exp.shares.map(s => {
-                  const isCurrent = s.participant.toLowerCase() === currentAccount.toLowerCase();
+                {(exp.shares || []).map(s => {
+                  const isCurrent = Boolean(s?.participant && currentAccount && s.participant.toLowerCase() === currentAccount.toLowerCase());
                   return (
                     <div key={s.participant} className="share-item">
                       <span className="share-participant">
