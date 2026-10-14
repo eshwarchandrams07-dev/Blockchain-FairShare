@@ -61,7 +61,9 @@ export async function fetchDetectedLanIp() {
 }
 
 export function getEffectiveHost(customIp = null) {
-  if (typeof window === 'undefined') return 'localhost:5173';
+  if (typeof window === 'undefined') {
+    return customIp && customIp.trim() ? `${customIp.trim()}:5173` : 'localhost:5173';
+  }
   const currentHost = window.location.hostname;
   const isLocal = currentHost === 'localhost' || currentHost === '127.0.0.1';
   const port = window.location.port ? `:${window.location.port}` : ':5173';
