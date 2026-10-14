@@ -812,25 +812,67 @@ class BlockchainStateService {
 
   // --- GROUP QUERIES & MUTATIONS ---
 
-  getGroups() {
+  getAllGroups() {
     return this.groups;
   }
 
+  isUserJoinedToGroup(grp) {
+    if (!grp) return false;
+    // Public groups are always visible to everyone
+    if (!grp.isPrivate) return true;
+
+    // Check if this device is an existing member of this private ledger
+    const myAddress = (this.myProfile?.address || this.currentAccount || '').toLowerCase();
+    const isMember = (grp.members || []).some(
+      m => m.address && m.address.toLowerCase() === myAddress
+    );
+
+    // Check if this device has unlocked this group
+    const isUnlocked = this.isGroupUnlocked(grp.id);
+
+    return isMember || isUnlocked;
+  }
+
+  getGroups() {
+    // Only return public ledgers and private ledgers the user is explicitly joined to
+    return this.groups.filter(g => this.isUserJoinedToGroup(g));
+  }
+
   getCurrentGroup() {
-    return this.groups.find(g => g.id === this.currentGroupId) || this.groups[0] || { 
-      id: this.currentGroupId || 1, 
-      name: 'Bangalore Apt 402 • Blockchain FairShare',
-      description: 'Multi-party decentralized expense ledger with live consensus quorum & debt simplification',
-      ledgerId: 'APT-402',
-      password: 'FS-4020',
-      inviteCode: 'FS-4020',
-      isPrivate: true,
+    let grp = this.groups.find(g => Number(g.id) === Number(this.currentGroupId));
+    
+    // If the group is private and the user is NOT joined or unlocked, protect it by falling back to the public ledger
+    if (grp && grp.isPrivate && !this.isUserJoinedToGroup(grp)) {
+      grp = this.groups.find(g => !g.isPrivate) || this.groups[0];
+      if (grp) {
+        this.currentGroupId = grp.id;
+      }
+    }
+
+    return grp || this.groups[0] || { 
+      id: 1, 
+      name: 'Public Ledger',
+      description: 'Open public decentralized expense sharing and settlement ledger',
+      ledgerId: 'PUB-101',
+      password: '',
+      inviteCode: 'PUBLIC',
+      isPrivate: false,
       members: [] 
     };
   }
 
   setCurrentGroupId(id) {
-    this.currentGroupId = Number(id);
+    const numericId = Number(id);
+    const grp = this.groups.find(g => Number(g.id) === numericId);
+    if (!grp) return;
+
+    // Reject switching to a private ledger if user does not have access / is not joined
+    if (grp.isPrivate && !this.isUserJoinedToGroup(grp)) {
+      console.warn('Access denied: Users cannot access a private ledger without ID and password');
+      return;
+    }
+
+    this.currentGroupId = numericId;
     this.ensureProfileInActiveGroup();
     this.saveState();
   }

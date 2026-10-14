@@ -43,7 +43,6 @@ export default function PrivateGroupGate({
   const [customPassword, setCustomPassword] = useState('');
   const [createError, setCreateError] = useState('');
 
-  const knownPrivateGroups = (groups || []).filter(g => g.isPrivate !== false);
 
   const matchingGroup = (groups || []).find(g => {
     if (!g.ledgerId) return false;
@@ -149,7 +148,7 @@ export default function PrivateGroupGate({
             </span>
           </div>
           <h2 className="private-gate-title">
-            {targetGroupName}
+            🔒 Private Protected Ledger
           </h2>
           <p className="private-gate-subtitle">
             This decentralized ledger is protected by 2-Factor Authentication (Ledger ID + Security Password). 
@@ -300,47 +299,7 @@ export default function PrivateGroupGate({
           </button>
         </div>
 
-        {/* Quick auto-fill pills for all known private groups */}
-        {knownPrivateGroups.length > 1 && (
-          <div 
-            style={{
-              marginTop: '12px',
-              padding: '10px 14px',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--bg-surface-elevated)',
-              border: '1px solid var(--border-subtle)',
-              fontSize: '11px',
-              textAlign: 'left'
-            }}
-          >
-            <div style={{ fontWeight: 700, color: 'var(--text-dim)', marginBottom: '6px', textTransform: 'uppercase', fontSize: '10px' }}>
-              💡 Select known private ledger to auto-fill:
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {knownPrivateGroups.map(g => {
-                const gId = g.ledgerId || (g.id === 1 ? 'APT-402' : `GRP-${g.id}`);
-                const gPass = g.password || g.inviteCode || 'FS-4020';
-                const isSelected = ledgerIdInput.trim().toUpperCase() === gId.toUpperCase();
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => {
-                      setLedgerIdInput(gId);
-                      setPasswordInput(gPass);
-                      setErrorMsg('');
-                    }}
-                    style={{ fontSize: '11px', height: '26px', padding: '0 8px' }}
-                  >
-                    <span className="mono" style={{ fontWeight: 800 }}>{gId}</span>
-                    <span style={{ opacity: 0.8, fontSize: '10px' }}>({(g.name || '').split('•')[0].trim()})</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+
 
         {/* Alternative: QR Code instruction */}
         <div className="private-gate-alt-box" style={{ marginTop: '16px', textAlign: 'left' }}>

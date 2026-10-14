@@ -29,9 +29,6 @@ export default function EnterLedgerModal({
 
   if (!isOpen) return null;
 
-  // Known private groups available in state for fast testing / quick-fill
-  const knownPrivateGroups = (groups || []).filter(g => g.isPrivate !== false);
-
   const handleSubmit = (e) => {
     e.preventDefault();
     setErrorMsg('');
@@ -63,11 +60,7 @@ export default function EnterLedgerModal({
     }, 200);
   };
 
-  const handleSelectQuickFill = (grp) => {
-    setLedgerId(grp.ledgerId || (grp.id === 1 ? 'APT-402' : `GRP-${grp.id}`));
-    setPassword(grp.password || grp.inviteCode || 'FS-4020');
-    setErrorMsg('');
-  };
+
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -247,50 +240,25 @@ export default function EnterLedgerModal({
             />
           </div>
 
-          {/* Quick-Fill Known Ledgers for Evaluator Testing */}
-          {knownPrivateGroups.length > 0 && (
-            <div 
-              style={{
-                background: 'var(--bg-surface-elevated)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-md)',
-                padding: '12px 14px',
-                marginBottom: '18px',
-                textAlign: 'left'
-              }}
-            >
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
-                💡 Quick-Test Known Ledgers (1-Click Auto-Fill):
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {knownPrivateGroups.map(g => {
-                  const gId = g.ledgerId || (g.id === 1 ? 'APT-402' : `GRP-${g.id}`);
-                  const gPass = g.password || g.inviteCode || 'FS-4020';
-                  const isSelected = ledgerId === gId;
-                  return (
-                    <button
-                      key={g.id}
-                      type="button"
-                      onClick={() => handleSelectQuickFill(g)}
-                      className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{
-                        fontSize: '11px',
-                        height: '28px',
-                        padding: '0 10px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      <span className="mono" style={{ fontWeight: 800 }}>{gId}</span>
-                      <span style={{ opacity: 0.85, fontSize: '10px' }}>({(g.name || '').split('•')[0].trim()})</span>
-                      {isSelected && <CheckCircle2 size={12} />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {/* Confidentiality Notice */}
+          <div 
+            style={{
+              background: 'rgba(245, 158, 11, 0.08)',
+              border: '1px solid rgba(245, 158, 11, 0.25)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
+              marginBottom: '18px',
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              textAlign: 'left'
+            }}
+          >
+            <ShieldCheck size={16} style={{ color: 'var(--color-amber)', flexShrink: 0 }} />
+            <span>Private ledgers are hidden from the public groups list. You must provide the exact Ledger ID and Password to view or join.</span>
+          </div>
 
           {/* Modal Actions */}
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
