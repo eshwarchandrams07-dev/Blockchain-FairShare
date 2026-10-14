@@ -225,16 +225,16 @@ export default function Navbar({
             </span>
           )}
 
-          {/* Reset Demo Showcase button */}
+          {/* Reset Public Ledger button */}
           <button 
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={onResetShowcase}
-            title="Reset to fresh showcase dataset with all 5 expense combinations, settlements & consensus states"
+            title="Reset to 1 clean Public Ledger with 0 initial users"
             style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
           >
             <RotateCcw size={13} style={{ color: 'var(--color-primary-light)' }} />
-            <span>Reset Demo</span>
+            <span>Reset Public Ledger</span>
           </button>
 
           {/* Active User Device Profile Card */}

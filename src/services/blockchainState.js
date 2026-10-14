@@ -156,7 +156,7 @@ export function getDeviceProfile() {
 
 class BlockchainStateService {
   constructor() {
-    this.storageKey = 'fairshare_blockchain_v3_multiuser';
+    this.storageKey = 'fairshare_blockchain_v5_publicledger';
     this.myProfile = getDeviceProfile();
     this.currentAccount = this.myProfile.address;
     this.currentGroupId = 1;
@@ -317,59 +317,48 @@ class BlockchainStateService {
         this.currentGroupId = parsed.currentGroupId || 1;
         this.currentBlockNumber = parsed.currentBlockNumber || 19843600;
 
+        // If no groups exist, seed the single public ledger
+        if (!this.groups || this.groups.length === 0) {
+          this.groups = [
+            {
+              id: 1,
+              name: 'Public Ledger',
+              isPrivate: false,
+              ledgerId: 'PUB-101',
+              password: '',
+              inviteCode: 'PUBLIC',
+              currency: '₹',
+              description: 'Decentralized public expense ledger. Open for community expense sharing and multi-device settlement.',
+              creator: this.myProfile?.address || '0x0000000000000000000000000000000000000000',
+              createdAt: Date.now(),
+              approvalPolicy: APPROVAL_POLICIES.MAJORITY_VOTE,
+              members: [], // 0 users initial
+            }
+          ];
+        }
+
         // Ensure all groups have isPrivate, ledgerId, password, and inviteCode
         this.groups.forEach(g => {
           if (g.isPrivate === undefined) {
-            g.isPrivate = g.id !== 3; // Group 3 is default public DAO
+            g.isPrivate = false;
           }
           if (!g.ledgerId) {
-            if (g.id === 1) g.ledgerId = 'APT-402';
-            else if (g.id === 2) g.ledgerId = 'GOA-2026';
-            else if (g.id === 3) g.ledgerId = 'DEV-DAO';
-            else g.ledgerId = `GRP-${100 + g.id}`;
+            g.ledgerId = g.id === 1 ? 'PUB-101' : `GRP-${100 + g.id}`;
           }
           if (g.password === undefined) {
-            if (g.id === 1) g.password = 'FS-4020';
-            else if (g.id === 2) g.password = 'GOA-7788';
-            else if (g.id === 3) g.password = '';
-            else g.password = g.inviteCode || `PASS-${1000 + g.id * 111}`;
+            g.password = g.isPrivate ? (g.inviteCode || `PASS-${1000 + g.id * 111}`) : '';
           }
           if (!g.inviteCode) {
-            g.inviteCode = g.password || 'FS-4020';
+            g.inviteCode = g.isPrivate ? (g.password || 'FS-4020') : 'PUBLIC';
           }
         });
-
-        // If existing state has 0 expenses or fewer than 2 members in group 1, seed the rich showcase dataset
-        // BUT only if this is the host and not a joining device waiting for sync from host
-        const hasPendingJoin = this.pendingJoinGroupId || this._hasPendingJoinInUrl();
-        const isHost = isOriginalHostDevice();
-        if (isHost && !hasPendingJoin && (this.expenses.length === 0 || this.groups.length === 0 || (this.groups[0]?.members?.length || 0) <= 1)) {
-          this.resetToDefaults();
-          return;
-        }
-
-        this.ensureProfileInActiveGroup();
       } else {
-        // No stored state at all
-        const hasPendingJoin = this.pendingJoinGroupId || this._hasPendingJoinInUrl();
-        const isHost = isOriginalHostDevice();
-        if (isHost && !hasPendingJoin) {
-          this.resetToDefaults();
-        } else {
-          // New device joining — initialize minimal empty state until synced from host
-          this.groups = [];
-          this.expenses = [];
-          this.auditLogs = [];
-          this.settlements = [];
-        }
+        // No stored state at all — initialize clean single public ledger with 0 initial users
+        this.resetToDefaults();
       }
     } catch (e) {
       console.error('Error loading state from localStorage:', e);
-      const hasPendingJoin = this.pendingJoinGroupId || this._hasPendingJoinInUrl();
-      const isHost = isOriginalHostDevice();
-      if (isHost && !hasPendingJoin) {
-        this.resetToDefaults();
-      }
+      this.resetToDefaults();
     }
   }
 
@@ -380,8 +369,8 @@ class BlockchainStateService {
         return JSON.parse(stored);
       }
     } catch {}
-    // Host starts with group 1 unlocked; remote/joining devices start with private groups locked
-    return isOriginalHostDevice() ? [1] : [];
+    // Group 1 is the public ledger, always unlocked
+    return [1];
   }
 
   saveUnlockedGroups() {
@@ -390,23 +379,45 @@ class BlockchainStateService {
     } catch {}
   }
 
-  ensureProfileInActiveGroup() {
-    if (this.groups && this.groups.length > 0) {
-      const activeGroup = this.getCurrentGroup();
-      if (activeGroup && this.isGroupUnlocked(activeGroup.id)) {
-        if (!activeGroup.members.some(m => m.address.toLowerCase() === this.myProfile.address.toLowerCase())) {
-          activeGroup.members.push({
-            address: this.myProfile.address,
-            name: this.myProfile.name,
-            role: activeGroup.members.length === 0 ? 'ADMIN' : 'MEMBER',
-            avatar: this.myProfile.avatar,
-            pin: this.myProfile.pin,
-            upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-            joinedAt: Date.now(),
-          });
-        }
-      }
+  isDeviceUserInActiveGroup() {
+    const activeGroup = this.getCurrentGroup();
+    if (!activeGroup || !activeGroup.members) return false;
+    return activeGroup.members.some(
+      m => m.address.toLowerCase() === this.myProfile.address.toLowerCase()
+    );
+  }
+
+  joinActiveGroupAsDeviceUser() {
+    const activeGroup = this.getCurrentGroup() || (this.groups && this.groups[0]);
+    if (!activeGroup) return null;
+    const exists = activeGroup.members.some(
+      m => m.address.toLowerCase() === this.myProfile.address.toLowerCase()
+    );
+    if (!exists) {
+      const newMember = {
+        address: this.myProfile.address,
+        name: this.myProfile.name,
+        role: activeGroup.members.length === 0 ? 'ADMIN' : 'MEMBER',
+        avatar: this.myProfile.avatar,
+        pin: this.myProfile.pin,
+        upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
+        tokenBalance: this.myProfile.tokenBalance || 50000,
+        joinedAt: Date.now(),
+      };
+      activeGroup.members.push(newMember);
+      this.saveState();
+      liveSync.broadcast({
+        type: 'MEMBER_JOINED',
+        groupId: activeGroup.id,
+        member: newMember,
+      });
+      return newMember;
     }
+    return null;
+  }
+
+  ensureProfileInActiveGroup() {
+    return this.joinActiveGroupAsDeviceUser();
   }
 
   saveState(skipBroadcast = false) {
@@ -462,504 +473,31 @@ class BlockchainStateService {
   }
 
   resetToDefaults() {
-    const p = this.getMyProfile();
-    p.name = p.name && !p.name.startsWith('User-') ? p.name : 'Eshwar (Admin)';
-    p.avatar = p.avatar || '👑';
-    p.role = 'ADMIN';
-    p.pin = p.pin || '1234';
-    p.upiId = p.upiId || 'eshwar@okhdfcbank';
-    p.tokenBalance = 75000; // ₹750.00 FSINR
-
-    this.unlockedGroupIds = [1];
-    this.saveUnlockedGroups();
-
-    try {
-      localStorage.setItem('fairshare_device_profile_v2', JSON.stringify(p));
-    } catch {}
-
-    const m1 = {
-      address: p.address,
-      name: p.name,
-      role: 'ADMIN',
-      avatar: p.avatar,
-      pin: p.pin,
-      upiId: p.upiId,
-      tokenBalance: p.tokenBalance,
-      joinedAt: Date.now() - 86400000 * 7,
-    };
-
-    const m2 = {
-      address: '0x71C841753D3b1b6f00A9E58A437E5d4aC33eA401',
-      name: 'Priya Sharma',
-      role: 'MEMBER',
-      avatar: '👩‍💼',
-      pin: '4321',
-      upiId: 'priya.sharma@paytm',
-      tokenBalance: 65000,
-      joinedAt: Date.now() - 86400000 * 6,
-    };
-
-    const m3 = {
-      address: '0x2546BcD3c84621e976D8185a91A922aE77ECEc30',
-      name: 'Rohan Verma',
-      role: 'MEMBER',
-      avatar: '👨‍💻',
-      pin: '7777',
-      upiId: 'rohanv@okaxis',
-      tokenBalance: 42000,
-      joinedAt: Date.now() - 86400000 * 5,
-    };
-
-    const m4 = {
-      address: '0xbDA5747bFD65F08deb54cb465eB87D40e51B197E',
-      name: 'Ananya Iyer',
-      role: 'MEMBER',
-      avatar: '👩‍🎨',
-      pin: '9999',
-      upiId: 'ananya.iyer@icici',
-      tokenBalance: 80000,
-      joinedAt: Date.now() - 86400000 * 4,
-    };
-
-    const m5 = {
-      address: '0xdD2FD4581271e230360230F9337D5c0430Bf44C0',
-      name: 'Kabir Mehta',
-      role: 'MEMBER',
-      avatar: '👨‍🚀',
-      pin: '5555',
-      upiId: 'kabir.mehta@oksbi',
-      tokenBalance: 35000,
-      joinedAt: Date.now() - 86400000 * 3,
-    };
-
     this.groups = [
       {
         id: 1,
-        name: 'Bangalore Apt 402 • Blockchain FairShare',
-        description: 'Multi-party decentralized expense ledger with live consensus quorum & debt simplification',
-        creator: m1.address,
-        approvalPolicy: APPROVAL_POLICIES.MAJORITY_VOTE, // 1
-        createdAt: Date.now() - 86400000 * 7,
-        isPrivate: true,
-        ledgerId: 'APT-402',
-        password: 'FS-4020',
-        inviteCode: 'FS-4020',
-        members: [m1, m2, m3, m4, m5],
-      },
-      {
-        id: 2,
-        name: 'Goa Annual Trip • Direct Settlement',
-        description: 'Vacation expense pooling with instant optimistic auto-approval & 24hr dispute window',
-        creator: m1.address,
-        approvalPolicy: APPROVAL_POLICIES.AUTO_APPROVE, // 0
-        createdAt: Date.now() - 86400000 * 3,
-        isPrivate: true,
-        ledgerId: 'GOA-2026',
-        password: 'GOA-7788',
-        inviteCode: 'GOA-7788',
-        members: [m1, m2, m3, m4],
-      },
-      {
-        id: 3,
-        name: 'Dev DAO Equipment Fund',
-        description: 'High-value hardware fund requiring 100% unanimous cryptographic consensus (Public Audit)',
-        creator: m1.address,
-        approvalPolicy: APPROVAL_POLICIES.UNANIMOUS_VOTE, // 2
-        createdAt: Date.now() - 86400000 * 2,
-        isPrivate: false, // PUBLIC COMMUNITY LEDGER (Open Transparency)
-        ledgerId: 'DEV-DAO',
-        password: '',
-        inviteCode: 'DAO-9900',
-        members: [m1, m2, m3],
-      },
+        name: "Public Ledger",
+        isPrivate: false,
+        ledgerId: "PUB-101",
+        password: "",
+        inviteCode: "PUBLIC",
+        currency: "₹",
+        description: "Decentralized public expense ledger. Open for community expense sharing and multi-device settlement.",
+        creator: this.myProfile?.address || "0x0000000000000000000000000000000000000000",
+        createdAt: Date.now(),
+        approvalPolicy: APPROVAL_POLICIES.MAJORITY_VOTE,
+        members: [], // Initial 0 users
+      }
     ];
 
-    this.expenses = [
-      // 1. Equal Split + Fully Approved + Live IPFS Pinata CIDv1
-      {
-        id: 1,
-        groupId: 1,
-        payer: m1.address,
-        payerName: m1.name,
-        title: 'Monthly High-Speed Fibre & Server Rack (1 Gbps)',
-        category: 'Utilities',
-        totalAmount: 240000, // ₹2,400.00
-        splitType: SPLIT_TYPES.EQUAL,
-        status: EXPENSE_STATUS.APPROVED,
-        receiptHash: '0x3f5b2e918c7a6e11409f8c6b3e9a01fd45bc2908819203847561029384756102',
-        receiptFileName: 'airtel_broadband_tax_invoice.pdf',
-        ipfsCid: 'bafkreigzsnk36s4w72l32l3n5x6pqqm33j226gcvjey45b2f67645f66de',
-        ipfsGatewayUrl: 'https://ipfs.io/ipfs/bafkreigzsnk36s4w72l32l3n5x6pqqm33j226gcvjey45b2f67645f66de',
-        isPinnedLive: true,
-        isBaseSepolia: false,
-        notes: 'Dedicated 1 Gbps fiber internet connection split equally across flatmates.',
-        createdAt: Date.now() - 86400000 * 4,
-        previousExpenseId: 0,
-        approvals: [m1.address, m2.address, m3.address, m4.address],
-        rejections: [],
-        shares: [
-          { participant: m1.address, name: m1.name, amount: 60000 },
-          { participant: m2.address, name: m2.name, amount: 60000 },
-          { participant: m3.address, name: m3.name, amount: 60000 },
-          { participant: m4.address, name: m4.name, amount: 60000 },
-        ],
-        votes: [
-          { participant: m1.address, name: m1.name, amount: 60000, status: 'AGREED', reason: 'Payer Submission', signature: generateTxHash(), timestamp: Date.now() - 86400000 * 4, pinVerified: true },
-          { participant: m2.address, name: m2.name, amount: 60000, status: 'AGREED', reason: 'Verified broadband bill', signature: generateTxHash(), timestamp: Date.now() - 86400000 * 4 + 3600000, pinVerified: true },
-          { participant: m3.address, name: m3.name, amount: 60000, status: 'AGREED', reason: 'Agreed', signature: generateTxHash(), timestamp: Date.now() - 86400000 * 4 + 7200000, pinVerified: true },
-          { participant: m4.address, name: m4.name, amount: 60000, status: 'AGREED', reason: 'Confirmed speed test', signature: generateTxHash(), timestamp: Date.now() - 86400000 * 4 + 10800000, pinVerified: true },
-        ],
-      },
-
-      // 2. Exact Amounts Split + PENDING Approval Vote (Interactive Consensus Ready!)
-      {
-        id: 2,
-        groupId: 1,
-        payer: m2.address,
-        payerName: m2.name,
-        title: 'Weekend Organic Supermarket & Gourmet Pantry',
-        category: 'Groceries',
-        totalAmount: 485000, // ₹4,850.00
-        splitType: SPLIT_TYPES.EXACT,
-        status: EXPENSE_STATUS.PENDING_APPROVAL,
-        receiptHash: '0x8a9b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b',
-        receiptFileName: 'nature_basket_itemized_receipt.pdf',
-        ipfsCid: 'bafkreidv723zsh4bql3v73i7yepx6y2k2r3f2n476o3i2b4jey2q5f77ne',
-        ipfsGatewayUrl: 'https://ipfs.io/ipfs/bafkreidv723zsh4bql3v73i7yepx6y2k2r3f2n476o3i2b4jey2q5f77ne',
-        isPinnedLive: false,
-        isBaseSepolia: false,
-        notes: 'Itemized grocery run with custom shares matching dietary preferences.',
-        createdAt: Date.now() - 3600000 * 5,
-        previousExpenseId: 0,
-        approvals: [m2.address, m4.address],
-        rejections: [],
-        shares: [
-          { participant: m1.address, name: m1.name, amount: 150000 },
-          { participant: m2.address, name: m2.name, amount: 80000 },
-          { participant: m3.address, name: m3.name, amount: 135000 },
-          { participant: m4.address, name: m4.name, amount: 120000 },
-        ],
-        votes: [
-          { participant: m1.address, name: m1.name, amount: 150000, status: 'PENDING', reason: '', signature: null, timestamp: null, pinVerified: false },
-          { participant: m2.address, name: m2.name, amount: 80000, status: 'AGREED', reason: 'Payer Submission', signature: generateTxHash(), timestamp: Date.now() - 3600000 * 5, pinVerified: true },
-          { participant: m3.address, name: m3.name, amount: 135000, status: 'PENDING', reason: '', signature: null, timestamp: null, pinVerified: false },
-          { participant: m4.address, name: m4.name, amount: 120000, status: 'AGREED', reason: 'Confirmed sourdough & dairy items', signature: generateTxHash(), timestamp: Date.now() - 3600000 * 3, pinVerified: true },
-        ],
-      },
-
-      // 3. Percentage Split + Active DISPUTED Expense
-      {
-        id: 3,
-        groupId: 1,
-        payer: m3.address,
-        payerName: m3.name,
-        title: 'Living Room 4K Projector & Surround Sound',
-        category: 'Electronics & Hardware',
-        totalAmount: 1200000, // ₹12,000.00
-        splitType: SPLIT_TYPES.PERCENTAGE,
-        status: EXPENSE_STATUS.DISPUTED,
-        disputeReason: 'Personal purchase claimed as shared: Priya flagged that the surround speakers were installed inside private bedroom rather than shared hall.',
-        disputedBy: m2.address,
-        disputedByName: m2.name,
-        receiptHash: '0x11223344556677889900aabbccddeeff00112233445566778899aabbccddeeff',
-        receiptFileName: 'croma_invoice_audio_hardware.pdf',
-        ipfsCid: 'bafkreiaa3f7w76q5m7b2y6h3g9f8a4b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7',
-        ipfsGatewayUrl: 'https://ipfs.io/ipfs/bafkreiaa3f7w76q5m7b2y6h3g9f8a4b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7',
-        isPinnedLive: false,
-        isBaseSepolia: false,
-        notes: 'Audio & projector setup for weekend movie screenings.',
-        createdAt: Date.now() - 86400000 * 3,
-        previousExpenseId: 0,
-        approvals: [m3.address],
-        rejections: [m2.address],
-        shares: [
-          { participant: m1.address, name: m1.name, amount: 480000 },
-          { participant: m2.address, name: m2.name, amount: 360000 },
-          { participant: m3.address, name: m3.name, amount: 360000 },
-        ],
-        votes: [
-          { participant: m1.address, name: m1.name, amount: 480000, status: 'PENDING', reason: '', signature: null, timestamp: null, pinVerified: false },
-          { participant: m2.address, name: m2.name, amount: 360000, status: 'REJECTED', reason: 'Speakers installed in private bedroom', signature: generateTxHash(), timestamp: Date.now() - 86400000 * 2, pinVerified: true },
-          { participant: m3.address, name: m3.name, amount: 360000, status: 'AGREED', reason: 'Payer Submission', signature: generateTxHash(), timestamp: Date.now() - 86400000 * 3, pinVerified: true },
-        ],
-      },
-
-      // 4. Immutable Correction Trail: Original Overbilled Record
-      {
-        id: 4,
-        groupId: 1,
-        payer: m1.address,
-        payerName: m1.name,
-        title: 'Flat Housewarming Dinner & Gourmet Catering',
-        category: 'Dining & Drinks',
-        totalAmount: 850000, // ₹8,500.00
-        splitType: SPLIT_TYPES.EQUAL,
-        status: EXPENSE_STATUS.CORRECTED,
-        correctionReason: 'Vendor refunded double-billed dessert items; revised on-chain in Expense #5.',
-        receiptHash: '0x223344556677889900aabbccddeeff0011223344556677889900aabbccddeeff',
-        receiptFileName: 'housewarming_catering_invoice_draft.pdf',
-        ipfsCid: 'bafkreihdraft4b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7a3f7w76q5m7b2y6h3g9f8a',
-        ipfsGatewayUrl: 'https://ipfs.io/ipfs/bafkreihdraft4b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7a3f7w76q5m7b2y6h3g9f8a',
-        isPinnedLive: false,
-        isBaseSepolia: false,
-        notes: 'Original invoice containing double-counted dessert course.',
-        createdAt: Date.now() - 86400000 * 5,
-        previousExpenseId: 0,
-        approvals: [m1.address],
-        rejections: [],
-        shares: [
-          { participant: m1.address, name: m1.name, amount: 212500 },
-          { participant: m2.address, name: m2.name, amount: 212500 },
-          { participant: m3.address, name: m3.name, amount: 212500 },
-          { participant: m4.address, name: m4.name, amount: 212500 },
-        ],
-      },
-
-      // 5. Immutable Correction Successor Record (Revised & Approved)
-      {
-        id: 5,
-        groupId: 1,
-        payer: m1.address,
-        payerName: m1.name,
-        title: 'Flat Housewarming Dinner & Catering (Revised Final)',
-        category: 'Dining & Drinks',
-        totalAmount: 650000, // ₹6,500.00
-        splitType: SPLIT_TYPES.EQUAL,
-        status: EXPENSE_STATUS.APPROVED,
-        previousExpenseId: 4,
-        correctionReason: 'Excluded ₹2,000 double-counted dessert items after catering vendor refund.',
-        receiptHash: '0x44556677889900aabbccddeeff0011223344556677889900aabbccddeeff0011',
-        receiptFileName: 'housewarming_catering_final_revised.pdf',
-        ipfsCid: 'bafkreihq5m7b2y6h3g9f8a4b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7a3f7w76',
-        ipfsGatewayUrl: 'https://ipfs.io/ipfs/bafkreihq5m7b2y6h3g9f8a4b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7a3f7w76',
-        isPinnedLive: false,
-        isBaseSepolia: false,
-        notes: 'Final on-chain settlement record linked to predecessor #4.',
-        createdAt: Date.now() - 86400000 * 2,
-        approvals: [m1.address, m2.address, m3.address, m4.address],
-        rejections: [],
-        shares: [
-          { participant: m1.address, name: m1.name, amount: 162500 },
-          { participant: m2.address, name: m2.name, amount: 162500 },
-          { participant: m3.address, name: m3.name, amount: 162500 },
-          { participant: m4.address, name: m4.name, amount: 162500 },
-        ],
-        votes: [
-          { participant: m1.address, name: m1.name, amount: 162500, status: 'AGREED', reason: 'Payer Submission', signature: generateTxHash(), timestamp: Date.now() - 86400000 * 2, pinVerified: true },
-          { participant: m2.address, name: m2.name, amount: 162500, status: 'AGREED', reason: 'Confirmed refund deducted', signature: generateTxHash(), timestamp: Date.now() - 86400000 * 2 + 1800000, pinVerified: true },
-          { participant: m3.address, name: m3.name, amount: 162500, status: 'AGREED', reason: 'Looks accurate now', signature: generateTxHash(), timestamp: Date.now() - 86400000 * 2 + 3600000, pinVerified: true },
-          { participant: m4.address, name: m4.name, amount: 162500, status: 'AGREED', reason: 'Agreed with revised amount', signature: generateTxHash(), timestamp: Date.now() - 86400000 * 2 + 5400000, pinVerified: true },
-        ],
-      },
-
-      // 6. Optimistic Auto-Approved Expense in Group 2
-      {
-        id: 6,
-        groupId: 2,
-        payer: m4.address,
-        payerName: m4.name,
-        title: 'Beachside Villa Advance Booking (3 Nights)',
-        category: 'Travel & Transit',
-        totalAmount: 1800000, // ₹18,000.00
-        splitType: SPLIT_TYPES.EQUAL,
-        status: EXPENSE_STATUS.APPROVED,
-        receiptHash: '0x9900aabbccddeeff0011223344556677889900aabbccddeeff00112233445566',
-        receiptFileName: 'goa_villa_booking_advance.pdf',
-        ipfsCid: 'bafkreicddeeff0011223344556677889900aabbccddeeff001122334455667788',
-        ipfsGatewayUrl: 'https://ipfs.io/ipfs/bafkreicddeeff0011223344556677889900aabbccddeeff001122334455667788',
-        isPinnedLive: false,
-        isBaseSepolia: false,
-        notes: 'Villa booking in North Goa for annual trip.',
-        createdAt: Date.now() - 86400000 * 1,
-        previousExpenseId: 0,
-        approvals: [m4.address],
-        rejections: [],
-        shares: [
-          { participant: m1.address, name: m1.name, amount: 450000 },
-          { participant: m2.address, name: m2.name, amount: 450000 },
-          { participant: m3.address, name: m3.name, amount: 450000 },
-          { participant: m4.address, name: m4.name, amount: 450000 },
-        ],
-      },
-    ];
-
-    this.settlements = [
-      // 1. Crypto FSINR Instant Settlement (Confirmed On-Chain)
-      {
-        id: 1,
-        groupId: 1,
-        from: m3.address,
-        fromName: m3.name,
-        to: m2.address,
-        toName: m2.name,
-        amount: 60000, // ₹600.00
-        settlementType: 'CRYPTO_DIRECT',
-        status: 'CONFIRMED',
-        txHash: '0x9b4c2e1f8a7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b',
-        timestamp: Date.now() - 86400000 * 3,
-        paymentRef: 'Atomic FSINR Transfer via Smart Contract',
-      },
-
-      // 2. UPI Direct Settlement (Verified On-Chain with UTR)
-      {
-        id: 2,
-        groupId: 1,
-        from: m4.address,
-        fromName: m4.name,
-        to: m1.address,
-        toName: m1.name,
-        amount: 150000, // ₹1,500.00
-        settlementType: 'UPI_DIRECT',
-        status: 'CONFIRMED',
-        txHash: '0x3a7f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b9b4c2e1f8a7d6c5b',
-        timestamp: Date.now() - 86400000 * 2,
-        paymentRef: 'UPI Transfer (UTR: 428901238491)',
-        utrNumber: '428901238491',
-        upiId: m1.upiId,
-      },
-
-      // 3. Off-Chain Cash Settlement (Proposed & Awaiting Confirmation)
-      {
-        id: 3,
-        groupId: 1,
-        from: m5.address,
-        fromName: m5.name,
-        to: m3.address,
-        toName: m3.name,
-        amount: 40000, // ₹400.00
-        settlementType: 'OFF_CHAIN_RECORD',
-        status: 'PENDING_CONFIRMATION',
-        txHash: '0x5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b8a9b7c6d5e4f3a2b1c0d9e8f7a6b',
-        timestamp: Date.now() - 3600000 * 8,
-        paymentRef: 'Handed ₹400 cash at office cafeteria',
-      },
-    ];
-
-    this.auditLogs = [
-      {
-        id: 1,
-        groupId: 1,
-        action: 'GROUP_DEPLOYED',
-        actor: m1.address,
-        actorName: m1.name,
-        details: 'Created and deployed group "Bangalore Apt 402 • Blockchain FairShare" with Majority Vote rule (>50% Quorum)',
-        blockNumber: 19843601,
-        txHash: generateTxHash(),
-        timestamp: Date.now() - 86400000 * 7,
-        gasUsed: '88,400',
-      },
-      {
-        id: 2,
-        groupId: 1,
-        action: 'MEMBER_JOINED',
-        actor: m2.address,
-        actorName: m2.name,
-        details: `${m2.name} joined the group roster on-chain with verified device key.`,
-        blockNumber: 19843604,
-        txHash: generateTxHash(),
-        timestamp: Date.now() - 86400000 * 6,
-        gasUsed: '42,100',
-      },
-      {
-        id: 3,
-        groupId: 1,
-        action: 'MEMBER_JOINED',
-        actor: m3.address,
-        actorName: m3.name,
-        details: `${m3.name} joined the group roster on-chain with verified device key.`,
-        blockNumber: 19843607,
-        txHash: generateTxHash(),
-        timestamp: Date.now() - 86400000 * 5,
-        gasUsed: '42,100',
-      },
-      {
-        id: 4,
-        groupId: 1,
-        action: 'EXPENSE_RECORDED',
-        actor: m1.address,
-        actorName: m1.name,
-        details: 'Submitted Expense #1 "Monthly High-Speed Fibre & Server Rack" for ₹2,400.00 with Pinata IPFS receipt.',
-        blockNumber: 19843610,
-        txHash: generateTxHash(),
-        timestamp: Date.now() - 86400000 * 4,
-        gasUsed: '64,200',
-      },
-      {
-        id: 5,
-        groupId: 1,
-        action: 'EXPENSE_CONFIRMED',
-        actor: m4.address,
-        actorName: 'Smart Contract Consensus',
-        details: 'Consensus sealed on Expense #1. Quorum 4/4 reached with digital PIN signatures.',
-        blockNumber: 19843612,
-        txHash: generateTxHash(),
-        timestamp: Date.now() - 86400000 * 4 + 10800000,
-        gasUsed: '51,800',
-      },
-      {
-        id: 6,
-        groupId: 1,
-        action: 'SETTLEMENT_CRYPTO_EXEC',
-        actor: m3.address,
-        actorName: m3.name,
-        details: `Executed instant on-chain crypto settlement to ${m2.name} for ₹600.00 FSINR.`,
-        blockNumber: 19843615,
-        txHash: generateTxHash(),
-        timestamp: Date.now() - 86400000 * 3,
-        gasUsed: '21,000',
-      },
-      {
-        id: 7,
-        groupId: 1,
-        action: 'DISPUTE_RAISED',
-        actor: m2.address,
-        actorName: m2.name,
-        details: 'Flagged dispute on Expense #3 "Living Room 4K Projector": Speakers placed in private bedroom. Balance suspended.',
-        blockNumber: 19843618,
-        txHash: generateTxHash(),
-        timestamp: Date.now() - 86400000 * 2,
-        gasUsed: '38,600',
-      },
-      {
-        id: 8,
-        groupId: 1,
-        action: 'EXPENSE_CORRECTED',
-        actor: m1.address,
-        actorName: m1.name,
-        details: 'Submitted immutable correction for Expense #4 -> New Expense #5. Reason: "Excluded ₹2,000 dessert double-billing after refund".',
-        blockNumber: 19843622,
-        txHash: generateTxHash(),
-        timestamp: Date.now() - 86400000 * 2,
-        gasUsed: '72,400',
-      },
-      {
-        id: 9,
-        groupId: 1,
-        action: 'SETTLEMENT_UPI_VERIFIED',
-        actor: m4.address,
-        actorName: m4.name,
-        details: `Anchored verified UPI settlement of ₹1,500.00 to ${m1.name} (UTR: 428901238491). Proof committed to ledger.`,
-        blockNumber: 19843628,
-        txHash: generateTxHash(),
-        timestamp: Date.now() - 86400000 * 2,
-        gasUsed: '34,900',
-      },
-      {
-        id: 10,
-        groupId: 1,
-        action: 'EXPENSE_RECORDED',
-        actor: m2.address,
-        actorName: m2.name,
-        details: 'Submitted Expense #2 "Weekend Organic Supermarket & Gourmet Pantry" for ₹4,850.00. Consensus block open for voting.',
-        blockNumber: 19843632,
-        txHash: generateTxHash(),
-        timestamp: Date.now() - 3600000 * 5,
-        gasUsed: '63,100',
-      },
-    ];
-
+    this.expenses = [];
+    this.settlements = [];
+    this.auditLogs = [];
     this.currentGroupId = 1;
-    this.currentBlockNumber = 19843635;
+    this.currentBlockNumber = 19843600;
+
+    this.unlockedGroupIds = [1];
+    this.saveUnlockedGroups();
     this.saveState();
   }
 
@@ -1007,9 +545,9 @@ class BlockchainStateService {
   }
 
   updateProfile({ name, avatar, pin, upiId }) {
-    this.myProfile.name = name;
-    this.myProfile.avatar = avatar;
-    this.myProfile.pin = pin;
+    if (name !== undefined) this.myProfile.name = name;
+    if (avatar !== undefined) this.myProfile.avatar = avatar;
+    if (pin !== undefined) this.myProfile.pin = pin;
     if (upiId !== undefined) {
       this.myProfile.upiId = upiId;
     }
@@ -1023,13 +561,30 @@ class BlockchainStateService {
     this.groups.forEach(grp => {
       const m = grp.members.find(mem => mem.address.toLowerCase() === this.myProfile.address.toLowerCase());
       if (m) {
-        m.name = name;
-        m.avatar = avatar;
-        m.pin = pin;
+        if (name !== undefined) m.name = name;
+        if (avatar !== undefined) m.avatar = avatar;
+        if (pin !== undefined) m.pin = pin;
         if (upiId !== undefined) {
           m.upiId = upiId;
         }
       }
+    });
+
+    // Also update in all expenses where this member is payer or participant
+    this.expenses.forEach(exp => {
+      if (exp.paidBy?.toLowerCase() === this.myProfile.address.toLowerCase() && name) {
+        exp.paidByName = name;
+      }
+      exp.participants?.forEach(pt => {
+        if (pt.address?.toLowerCase() === this.myProfile.address.toLowerCase() && name) {
+          pt.name = name;
+        }
+      });
+      exp.signatures?.forEach(sig => {
+        if (sig.voter?.toLowerCase() === this.myProfile.address.toLowerCase() && name) {
+          sig.voterName = name;
+        }
+      });
     });
 
     liveSync.broadcast({

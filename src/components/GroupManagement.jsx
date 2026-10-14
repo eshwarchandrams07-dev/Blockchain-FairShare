@@ -424,8 +424,27 @@ export default function GroupManagement({
           </h4>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
-          {currentGroup.members.map(m => {
+        <div style={{ display: 'grid', gridTemplateColumns: currentGroup.members.length === 0 ? '1fr' : 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
+          {currentGroup.members.length === 0 ? (
+            <div 
+              style={{ 
+                padding: '40px 24px', 
+                textAlign: 'center', 
+                background: 'rgba(255, 255, 255, 0.6)', 
+                border: '1px dashed var(--border-medium)', 
+                borderRadius: 'var(--radius-lg)' 
+              }}
+            >
+              <div style={{ fontSize: '36px', marginBottom: '10px' }}>🌐</div>
+              <h5 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 6px 0', color: 'var(--text-main)' }}>
+                0 Users Initial in Public Ledger
+              </h5>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '460px', margin: '0 auto 16px auto', lineHeight: 1.5 }}>
+                When users connect from different devices, users increase here automatically. Click "Continue" or "Join" in the device banner above to join with this device.
+              </p>
+            </div>
+          ) : (
+            currentGroup.members.map(m => {
             const isUser = m.address.toLowerCase() === currentAccount.toLowerCase();
             const balObj = groupBalances.find(b => b.address.toLowerCase() === m.address.toLowerCase());
             const bal = balObj ? balObj.netBalance : 0;
@@ -492,7 +511,8 @@ export default function GroupManagement({
                 </div>
               </div>
             );
-          })}
+          })
+          )}
         </div>
       </div>
 

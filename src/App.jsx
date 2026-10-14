@@ -18,6 +18,7 @@ import IpfsModal from './components/IpfsModal';
 import ArchitectureModal from './components/ArchitectureModal';
 import PrivateGroupGate from './components/PrivateGroupGate';
 import EnterLedgerModal from './components/EnterLedgerModal';
+import DeviceUserBanner from './components/DeviceUserBanner';
 import Toast from './components/Toast';
 import confetti from 'canvas-confetti';
 import { 
@@ -219,8 +220,25 @@ export default function App() {
   const settlements = blockchainService.settlements;
   const activePersona = blockchainService.getActivePersona();
   const groupBalances = blockchainService.calculateGroupBalances(currentGroup.id);
+  const myProfile = blockchainService.getMyProfile();
+  const isDeviceJoined = currentGroup?.members?.some(
+    m => m.address.toLowerCase() === myProfile.address.toLowerCase()
+  );
 
   // Handlers
+  const handleUpdateDeviceName = (newName) => {
+    blockchainService.updateProfile({ name: newName });
+    addToast('User Name Updated', `Changed device name to "${newName}"`, 'success');
+  };
+
+  const handleJoinAndContinue = () => {
+    const joined = blockchainService.joinActiveGroupAsDeviceUser();
+    if (joined) {
+      addToast('Joined Public Ledger', `Added "${myProfile.name}" as verified user to the public ledger!`, 'success');
+      confetti({ particleCount: 50, spread: 60, origin: { y: 0.85 } });
+    }
+  };
+
   const handleSaveProfile = (newProfileData) => {
     const updated = blockchainService.updateProfile(newProfileData);
     addToast('Profile Updated', `Device identity set to ${updated.name} (${updated.avatar})`, 'success');
@@ -369,7 +387,7 @@ export default function App() {
         onLockGroup={handleLockGroup}
         onResetShowcase={() => {
           blockchainService.resetToDefaults();
-          addToast('Showcase Dataset Reloaded', 'Loaded all 5 members & all combinations of expenses, settlements, and voting', 'success');
+          addToast('Public Ledger Reset', 'Initialized 1 Public Ledger with 0 initial users. Ready for multi-device connections!', 'success');
         }}
       />
 
@@ -446,6 +464,16 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* Device User Identity & 1 User Per Device Control */}
+        <DeviceUserBanner
+          profile={myProfile}
+          isJoined={isDeviceJoined}
+          onJoinAndContinue={handleJoinAndContinue}
+          onUpdateName={handleUpdateDeviceName}
+          onOpenProfileModal={() => setIsProfileModalOpen(true)}
+          memberCount={currentGroup?.members?.length || 0}
+        />
 
         {/* Navigation Tabs Bar */}
         <div className="tabs-bar">
