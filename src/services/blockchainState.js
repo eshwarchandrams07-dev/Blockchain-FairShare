@@ -758,6 +758,7 @@ class BlockchainStateService {
       provider: user.provider || 'google',
     };
     this.currentAccount = user.address;
+    this.currentGroupId = 1; // Default directly to the open Public Ledger
     this.ensureProfileInPublicLedger();
     this.saveState();
     this.notifyListeners();
@@ -1527,9 +1528,9 @@ class BlockchainStateService {
       initialStatus = EXPENSE_STATUS.APPROVED;
     }
 
-    const payerAddr = this.currentAccount.toLowerCase();
+    const payerAddr = (this.currentAccount || this.myProfile?.address || '').toLowerCase();
     const votes = shares.map(s => {
-      const isPayer = (s.participant || '').toLowerCase() === payerAddr;
+      const isPayer = Boolean(payerAddr && (s.participant || '').toLowerCase() === payerAddr);
       return {
         participant: s.participant,
         name: s.name,
@@ -1605,20 +1606,22 @@ class BlockchainStateService {
     if (!exp) throw new Error('Expense not found');
     if (exp.status !== EXPENSE_STATUS.PENDING_APPROVAL) throw new Error('Expense not pending approval');
 
-    if (!exp.approvals.some(a => a.toLowerCase() === this.currentAccount.toLowerCase())) {
-      exp.approvals.push(this.currentAccount);
+    if (!exp.approvals) exp.approvals = [];
+    const myCurrent = (this.currentAccount || this.myProfile?.address || '').toLowerCase();
+    if (myCurrent && !exp.approvals.some(a => a && a.toLowerCase() === myCurrent)) {
+      exp.approvals.push(this.currentAccount || this.myProfile?.address);
     }
 
     const group = this.groups.find(g => g.id === groupId);
-    const totalParticipants = exp.shares.length;
+    const totalParticipants = exp.shares?.length || 1;
     let quorumReached = false;
 
-    if (group.approvalPolicy === APPROVAL_POLICIES.ADMIN_ONLY) {
-      const callerRole = group.members.find(m => m.address.toLowerCase() === this.currentAccount.toLowerCase())?.role;
+    if (group?.approvalPolicy === APPROVAL_POLICIES.ADMIN_ONLY) {
+      const callerRole = (group.members || []).find(m => m?.address && myCurrent && m.address.toLowerCase() === myCurrent)?.role;
       if (callerRole === 'ADMIN') quorumReached = true;
-    } else if (group.approvalPolicy === APPROVAL_POLICIES.UNANIMOUS_VOTE) {
+    } else if (group?.approvalPolicy === APPROVAL_POLICIES.UNANIMOUS_VOTE) {
       if (exp.approvals.length >= totalParticipants) quorumReached = true;
-    } else if (group.approvalPolicy === APPROVAL_POLICIES.MAJORITY_VOTE) {
+    } else if (group?.approvalPolicy === APPROVAL_POLICIES.MAJORITY_VOTE) {
       if (exp.approvals.length > Math.floor(totalParticipants / 2)) quorumReached = true;
     }
 
@@ -1653,17 +1656,18 @@ class BlockchainStateService {
       throw new Error(`Consensus Block for Expense #${expenseId} is already ${STATUS_LABELS[exp.status] || 'closed'}.`);
     }
 
-    const isMember = group?.members.some(m => m.address.toLowerCase() === voterAddress.toLowerCase());
+    const group = this.groups.find(g => Number(g.id) === Number(groupId));
+    const isMember = group?.members?.some(m => m?.address && voterAddress && m.address.toLowerCase() === voterAddress.toLowerCase());
     if (group && !isMember) {
       throw new Error(`Security Violation: Voter is not a participant in group #${groupId}.`);
     }
 
-    const isMyDevice = voterAddress.toLowerCase() === this.myProfile.address.toLowerCase();
+    const isMyDevice = voterAddress && this.myProfile?.address && voterAddress.toLowerCase() === this.myProfile.address.toLowerCase();
     if (!isMyDevice) {
-      throw new Error(`Device Security Violation: This device can only sign votes for its own user account (${this.myProfile.name}). Each device has its own user.`);
+      throw new Error(`Device Security Violation: This device can only sign votes for its own user account (${this.myProfile?.name || 'User'}). Each device has its own user.`);
     }
-    const expectedPin = this.myProfile.pin;
-    const voterName = this.myProfile.name;
+    const expectedPin = this.myProfile?.pin;
+    const voterName = this.myProfile?.name || 'User';
 
     // ANTI-CHEAT SECURITY CHECK: Verify Voter PIN
     if (!pin || pin.trim() !== expectedPin) {
@@ -1671,19 +1675,26 @@ class BlockchainStateService {
     }
 
     if (!exp.votes) {
-      exp.votes = exp.shares.map(s => ({
-        participant: s.participant,
-        name: s.name,
-        amount: s.amount,
-        status: s.participant.toLowerCase() === exp.payer.toLowerCase() ? 'AGREED' : 'PENDING',
-        reason: s.participant.toLowerCase() === exp.payer.toLowerCase() ? 'Payer Submission' : '',
-        signature: s.participant.toLowerCase() === exp.payer.toLowerCase() ? generateTxHash() : null,
-        timestamp: s.participant.toLowerCase() === exp.payer.toLowerCase() ? exp.createdAt : null,
-        pinVerified: true,
-      }));
+      exp.votes = (exp.shares || []).map(s => {
+        const isPayer = Boolean(
+          s?.participant && 
+          exp?.payer && 
+          s.participant.toLowerCase() === exp.payer.toLowerCase()
+        );
+        return {
+          participant: s?.participant || '',
+          name: s?.name || 'Member',
+          amount: s?.amount || 0,
+          status: isPayer ? 'AGREED' : 'PENDING',
+          reason: isPayer ? 'Payer Submission' : '',
+          signature: isPayer ? generateTxHash() : null,
+          timestamp: isPayer ? exp.createdAt : null,
+          pinVerified: true,
+        };
+      });
     }
 
-    const voteItem = exp.votes.find(v => v.participant.toLowerCase() === voterAddress.toLowerCase());
+    const voteItem = (exp.votes || []).find(v => v?.participant && voterAddress && v.participant.toLowerCase() === voterAddress.toLowerCase());
     if (!voteItem) {
       throw new Error(`Address ${voterAddress} is not a listed participant on Expense #${expenseId}`);
     }

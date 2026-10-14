@@ -110,7 +110,7 @@ function AddExpenseModalContent({
       let remainder = totalCents % count;
 
       return selectedParticipants.map((addr) => {
-        const m = currentGroup.members.find(x => x.address.toLowerCase() === addr.toLowerCase());
+        const m = (currentGroup?.members || []).find(x => x?.address && addr && x.address.toLowerCase() === addr.toLowerCase());
         const extra = remainder > 0 ? 1 : 0;
         if (remainder > 0) remainder--;
 
@@ -124,7 +124,7 @@ function AddExpenseModalContent({
 
     if (splitType === SPLIT_TYPES.EXACT) {
       return selectedParticipants.map((addr) => {
-        const m = currentGroup.members.find(x => x.address.toLowerCase() === addr.toLowerCase());
+        const m = (currentGroup?.members || []).find(x => x?.address && addr && x.address.toLowerCase() === addr.toLowerCase());
         const valCents = dollarsToCents(customAmounts[addr] || '0');
         return {
           participant: addr,
@@ -139,7 +139,7 @@ function AddExpenseModalContent({
       let allocatedCents = 0;
 
       return selectedParticipants.map((addr, idx) => {
-        const m = currentGroup.members.find(x => x.address.toLowerCase() === addr.toLowerCase());
+        const m = (currentGroup?.members || []).find(x => x?.address && addr && x.address.toLowerCase() === addr.toLowerCase());
         const pct = parseFloat(customPercentages[addr] || '0') / 100;
         let shareAmt = Math.round(totalCents * pct);
 
@@ -395,9 +395,9 @@ function AddExpenseModalContent({
           <div className="form-group">
             <label className="form-label">Participants & Share Calculation</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
-              {currentGroup.members.map(m => {
+              {(currentGroup?.members || []).filter(m => m && m.address).map(m => {
                 const isSelected = selectedParticipants.includes(m.address);
-                const shareObj = calculatedShares.find(s => s.participant.toLowerCase() === m.address.toLowerCase());
+                const shareObj = calculatedShares.find(s => s?.participant && s.participant.toLowerCase() === m.address.toLowerCase());
 
                 return (
                   <div 

@@ -15,7 +15,7 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { fetchDetectedLanIp, saveLanIp, getEffectiveHost } from '../utils/networkUtils';
+import { fetchDetectedLanIp, saveLanIp, getEffectiveHost, getSavedLanIp } from '../utils/networkUtils';
 
 export default function ConnectDevicesModal({
   isOpen,
@@ -24,8 +24,10 @@ export default function ConnectDevicesModal({
   groupName = 'Ledger',
   inviteCode = 'FS-4020',
   currentGroup,
-  activePersona
+  activePersona,
 }) {
+  if (!isOpen) return null;
+
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [copiedPass, setCopiedPass] = useState(false);

@@ -21,6 +21,18 @@ class LiveSyncService {
     this.initBroadcastChannel();
     this.initWebSocket();
     this.fetchServerCachedState();
+    this.startHttpPolling();
+  }
+
+  startHttpPolling() {
+    if (typeof window === 'undefined') return;
+    if (this._pollingInterval) clearInterval(this._pollingInterval);
+    this._pollingInterval = setInterval(() => {
+      // If WebSocket is not actively connected (as on Vercel), continuously sync via HTTP
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        this.fetchServerCachedState();
+      }
+    }, 3500);
   }
 
   fetchServerCachedState() {
@@ -35,6 +47,10 @@ class LiveSyncService {
               state: data.state,
               fromServerHttp: true,
             }, 'HTTP_HYDRATION');
+            if (this.status === 'DISCONNECTED' || this.status === 'LOCAL_ONLY') {
+              this.status = 'CONNECTED';
+              this.notifyStatusChange();
+            }
           }
         })
         .catch(() => {});

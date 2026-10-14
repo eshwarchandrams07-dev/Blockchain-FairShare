@@ -19,16 +19,23 @@ export default function ConsensusBlock({
 }) {
   if (!expense) return null;
 
-  const votes = expense.votes || expense.shares.map(s => ({
-    participant: s.participant,
-    name: s.name,
-    amount: s.amount,
-    status: s.participant.toLowerCase() === expense.payer.toLowerCase() ? 'AGREED' : 'PENDING',
-    reason: s.participant.toLowerCase() === expense.payer.toLowerCase() ? 'Payer submission' : '',
-    signature: s.participant.toLowerCase() === expense.payer.toLowerCase() ? expense.receiptHash : null,
-    timestamp: expense.createdAt,
-    pinVerified: true,
-  }));
+  const votes = expense.votes || (expense.shares || []).map(s => {
+    const isPayer = Boolean(
+      s?.participant && 
+      expense?.payer && 
+      s.participant.toLowerCase() === expense.payer.toLowerCase()
+    );
+    return {
+      participant: s?.participant || '',
+      name: s?.name || 'Member',
+      amount: s?.amount || 0,
+      status: isPayer ? 'AGREED' : 'PENDING',
+      reason: isPayer ? 'Payer submission' : '',
+      signature: isPayer ? expense.receiptHash : null,
+      timestamp: expense.createdAt,
+      pinVerified: true,
+    };
+  });
 
   const totalParticipants = votes.length;
   const agreedCount = votes.filter(v => v.status === 'AGREED').length;
@@ -97,7 +104,7 @@ export default function ConsensusBlock({
             Consensus Progress: <strong>{agreedCount} of {totalParticipants} agreed ({quorumPercentage}%)</strong>
           </span>
           <span style={{ color: 'var(--text-dim)' }}>
-            Policy: {POLICY_LABELS[currentGroup.approvalPolicy] || 'Majority Vote'}
+            Policy: {POLICY_LABELS[currentGroup?.approvalPolicy ?? 0] || 'Majority Vote'}
           </span>
         </div>
 
@@ -117,7 +124,11 @@ export default function ConsensusBlock({
       {/* Participant Consensus Roster Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px', marginBottom: '14px' }}>
         {votes.map((v) => {
-          const isCurrentActiveUser = v.participant.toLowerCase() === currentAccount.toLowerCase();
+          const isCurrentActiveUser = Boolean(
+            v?.participant && 
+            currentAccount && 
+            v.participant.toLowerCase() === currentAccount.toLowerCase()
+          );
           const isAgreed = v.status === 'AGREED';
           const isRejectedVote = v.status === 'REJECTED';
           const isPendingVote = v.status === 'PENDING';

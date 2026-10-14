@@ -34,13 +34,21 @@ function SignVoteModalContent({
   
   // Lookup device profile or member
   const myProfile = blockchainService.getMyProfile();
-  const isMyDevice = voterAddress.toLowerCase() === myProfile.address.toLowerCase();
-  const expectedPin = isMyDevice ? myProfile.pin : (voter?.pin || '1234');
-  const voterName = isMyDevice ? myProfile.name : (voter?.name || shortenAddress(voterAddress));
-  const voterAvatar = isMyDevice ? myProfile.avatar : (voter?.avatar || '👤');
+  const isMyDevice = Boolean(
+    voterAddress && 
+    myProfile?.address && 
+    voterAddress.toLowerCase() === myProfile.address.toLowerCase()
+  );
+  const expectedPin = isMyDevice ? (myProfile?.pin || '1234') : (voter?.pin || '1234');
+  const voterName = isMyDevice ? (myProfile?.name || 'User') : (voter?.name || shortenAddress(voterAddress));
+  const voterAvatar = isMyDevice ? (myProfile?.avatar || '👤') : (voter?.avatar || '👤');
 
   // Safe lookup for share amount
-  const shareObj = expense?.shares?.find(s => s.participant.toLowerCase() === voterAddress.toLowerCase());
+  const shareObj = (expense?.shares || []).find(s => 
+    s?.participant && 
+    voterAddress && 
+    s.participant.toLowerCase() === voterAddress.toLowerCase()
+  );
   const shareAmount = shareObj ? shareObj.amount : (voter?.amount || 0);
 
   const handleSubmit = (e) => {

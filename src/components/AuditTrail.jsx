@@ -46,9 +46,10 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
   const [certDate, setCertDate] = useState('');
   const [verificationResult, setVerificationResult] = useState(null);
 
-  const groupLogs = auditLogs.filter(l => l.groupId === currentGroup.id);
+  const groupLogs = (auditLogs || []).filter(l => l && currentGroup && l.groupId === currentGroup.id);
 
   const handleVerifyLedgerChain = () => {
+    if (!currentGroup?.id) return;
     const res = blockchainService.verifyLedgerIntegrity(currentGroup.id);
     setVerificationResult(res);
     setTimeout(() => {
@@ -62,25 +63,28 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
   };
 
   const handleDownloadProofJson = () => {
+    if (!currentGroup) return;
     const proofData = generateProofJson(currentGroup, groupLogs);
     const blob = new Blob([JSON.stringify(proofData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `fairshare_audit_proof_group_${currentGroup.id}.json`;
+    a.download = `fairshare_audit_proof_group_${currentGroup.id || 1}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const filteredLogs = groupLogs.filter(l => {
+    if (!l) return false;
     const matchesAction = selectedAction === 'ALL' || l.action === selectedAction;
-    const q = searchQuery.toLowerCase();
+    const q = (searchQuery || '').toLowerCase();
+    if (!q) return matchesAction;
     const matchesSearch = 
-      l.details.toLowerCase().includes(q) ||
-      l.actorName.toLowerCase().includes(q) ||
-      l.actor.toLowerCase().includes(q) ||
-      l.txHash.toLowerCase().includes(q) ||
-      l.action.toLowerCase().includes(q);
+      (l.details || '').toLowerCase().includes(q) ||
+      (l.actorName || '').toLowerCase().includes(q) ||
+      (l.actor || '').toLowerCase().includes(q) ||
+      (l.txHash || '').toLowerCase().includes(q) ||
+      (l.action || '').toLowerCase().includes(q);
     return matchesAction && matchesSearch;
   });
 
@@ -91,6 +95,7 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
   };
 
   const getActionBadgeClass = (action) => {
+    if (!action) return 'badge-neutral';
     if (action.includes('CONFIRMED') || action.includes('APPROVED') || action.includes('MEMBER') || action.includes('DEPLOYED')) return 'badge-approved';
     if (action.includes('DISPUTE')) return 'badge-disputed';
     if (action.includes('CORRECTED')) return 'badge-corrected';

@@ -18,7 +18,9 @@ export default function ReceiptVerifier({ expenses, currentGroup }) {
   const [matchResult, setMatchResult] = useState(null); // { matched: boolean, expense?: object }
   const [manualHashInput, setManualHashInput] = useState('');
 
-  const groupExpensesWithReceipts = expenses.filter(e => e.groupId === currentGroup.id && e.receiptHash);
+  const groupExpensesWithReceipts = (expenses || []).filter(
+    e => e && currentGroup && e.groupId === currentGroup.id && e.receiptHash
+  );
 
   const handleFileDrop = async (e) => {
     e.preventDefault();
@@ -42,8 +44,11 @@ export default function ReceiptVerifier({ expenses, currentGroup }) {
   };
 
   const verifyAgainstExpenses = (hashToCheck) => {
-    const cleanHash = hashToCheck.trim().toLowerCase();
-    const matchedExp = expenses.find(e => e.receiptHash && e.receiptHash.toLowerCase() === cleanHash);
+    if (!hashToCheck) return;
+    const cleanHash = String(hashToCheck).trim().toLowerCase();
+    const matchedExp = (expenses || []).find(
+      e => e?.receiptHash && String(e.receiptHash).toLowerCase() === cleanHash
+    );
 
     if (matchedExp) {
       setMatchResult({

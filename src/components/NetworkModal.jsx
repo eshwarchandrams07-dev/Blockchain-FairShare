@@ -161,7 +161,7 @@ function NetworkModalContent({ onClose, onNetworkSwitched }) {
 
         {statusMsg && (
           <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-medium)', fontSize: '13px', color: 'var(--text-main)', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {statusMsg.toLowerCase().includes('fail') || statusMsg.toLowerCase().includes('error') ? (
+            {String(statusMsg).toLowerCase().includes('fail') || String(statusMsg).toLowerCase().includes('error') ? (
               <AlertCircle size={16} style={{ color: 'var(--color-rose)' }} />
             ) : (
               <CheckCircle2 size={16} style={{ color: 'var(--color-emerald)' }} />

@@ -290,8 +290,10 @@ export default function App() {
   const handleJoinAndContinue = () => {
     const joined = blockchainService.joinActiveGroupAsDeviceUser();
     if (joined) {
-      addToast('Joined Public Ledger', `Added "${myProfile.name}" as verified user to the public ledger!`, 'success');
-      confetti({ particleCount: 50, spread: 60, origin: { y: 0.85 } });
+      addToast('Joined Public Ledger', `Added "${myProfile?.name || 'User'}" as verified user to the public ledger!`, 'success');
+      try {
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.85 } });
+      } catch {}
     }
   };
 
@@ -319,7 +321,7 @@ export default function App() {
     addToast('Group Switched', `Active workspace updated to Group #${id}`, 'info');
   };
 
-  const isGroupUnlocked = blockchainService.isGroupUnlocked(currentGroup.id);
+  const isGroupUnlocked = blockchainService.isGroupUnlocked(currentGroup?.id || 1);
 
   const handleCreateGroup = (name, description, policy, creatorName, isPrivate, customLedgerId, customPassword) => {
     const newGrp = blockchainService.createGroup(name, description, policy, creatorName, isPrivate, customLedgerId, customPassword);
@@ -345,9 +347,12 @@ export default function App() {
     if (res && res.success) {
       addToast(
         'Private Ledger Unlocked',
-        `Device entered "${res.group.name}" (ID: ${res.group.ledgerId})!`,
+        `Access granted to "${res.group.name}" (ID: ${res.group.ledgerId || ledgerId})!`,
         'success'
       );
+      try {
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.85 } });
+      } catch {}
       setIsEnterLedgerModalOpen(false);
     }
     return res;
@@ -566,7 +571,7 @@ export default function App() {
             <Receipt size={16} />
             <span>Expenses</span>
             <span className="tab-badge">
-              {expenses.filter(e => e.groupId === currentGroup.id).length}
+              {(expenses || []).filter(e => e && e.groupId === currentGroup?.id).length}
             </span>
           </button>
 
@@ -603,7 +608,7 @@ export default function App() {
           >
             <History size={16} />
             <span>Audit Trail</span>
-            <span className="tab-badge">{auditLogs.length}</span>
+            <span className="tab-badge">{(auditLogs || []).length}</span>
           </button>
 
           <button
@@ -684,7 +689,7 @@ export default function App() {
             onRecordOffChain={handleRecordOffChain}
             onConfirmOffChain={handleConfirmOffChain}
             onDisputeOffChain={handleDisputeOffChain}
-            onUpdateMemberUpi={(memberAddress, upiId) => blockchainService.updateMemberUpi(currentGroup.id, memberAddress, upiId)}
+            onUpdateMemberUpi={(memberAddress, upiId) => blockchainService.updateMemberUpi(currentGroup?.id || 1, memberAddress, upiId)}
           />
         )}
 
