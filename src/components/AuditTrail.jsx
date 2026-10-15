@@ -24,11 +24,11 @@ function generateProofJson(currentGroup, groupLogs) {
     export_timestamp: now.toISOString(),
     network: 'Base Sepolia L2 Rollup (Chain ID 84532)',
     group: {
-      id: currentGroup.id,
-      name: currentGroup.name,
-      creator: currentGroup.creator,
-      members_count: (currentGroup.members || []).length,
-      members: currentGroup.members,
+      id: currentGroup?.id,
+      name: currentGroup?.name,
+      creator: currentGroup?.creator,
+      members_count: (currentGroup?.members || []).length,
+      members: currentGroup?.members || [],
     },
     mathematical_integrity: {
       zero_sum_invariant: 'SUM(credits - debits) == 0.00',

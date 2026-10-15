@@ -73,6 +73,7 @@ export default function DashboardOverview({
   const isPrivate = currentGroup?.isPrivate !== false;
 
   const handleCopyAuditorLink = () => {
+    if (!currentGroup) return;
     const url = typeof window !== 'undefined' 
       ? `${window.location.origin}/?joinGroup=${currentGroup.id}&view=auditor`
       : `/?joinGroup=${currentGroup.id}`;

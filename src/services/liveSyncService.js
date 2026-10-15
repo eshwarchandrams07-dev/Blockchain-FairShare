@@ -34,6 +34,22 @@ class LiveSyncService {
         this.fetchServerCachedState();
       }
     }, 3500);
+
+    // Eagerly re-sync when tab regains focus or user wakes up device after hours
+    if (!this._visibilityListenerAttached) {
+      this._visibilityListenerAttached = true;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.fetchServerCachedState();
+          if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            this.initWebSocket();
+          }
+        }
+      });
+      window.addEventListener('focus', () => {
+        this.fetchServerCachedState();
+      });
+    }
   }
 
   fetchServerCachedState() {

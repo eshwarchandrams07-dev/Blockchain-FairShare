@@ -16,7 +16,8 @@ import {
   KeyRound,
   Hash,
   Eye,
-  EyeOff
+  EyeOff,
+  CheckCircle2
 } from 'lucide-react';
 import { shortenAddress, formatCents } from '../utils/cryptoUtils';
 import { APPROVAL_POLICIES, POLICY_LABELS } from '../services/blockchainState';
@@ -448,6 +449,13 @@ export default function GroupManagement({
                       )}
                       {isUser && <span className="badge badge-neutral" style={{ fontSize: '10px' }}>YOU</span>}
                     </div>
+
+                    {m.email && (
+                      <div style={{ fontSize: '11px', color: '#1a73e8', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                        <CheckCircle2 size={11} style={{ color: '#059669' }} />
+                        <span>{m.email}</span>
+                      </div>
+                    )}
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
                       <span className="mono" style={{ fontSize: '12px', color: 'var(--text-dim)' }}>

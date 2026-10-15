@@ -210,7 +210,7 @@ const server = http.createServer((req, res) => {
         try {
           const parsed = JSON.parse(body);
           const incomingState = parsed.state || parsed;
-          if (incomingState && (incomingState.groups || incomingState.state)) {
+          if (incomingState && (incomingState.groups || incomingState.expenses || incomingState.settlements || incomingState.auditLogs || incomingState.state)) {
             cachedLedgerState = mergeLedgerStates(cachedLedgerState, incomingState);
             persistStateToDisk(cachedLedgerState);
           }
@@ -323,11 +323,24 @@ wss.on('connection', (ws) => {
   ws.on('error', () => clients.delete(ws));
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+const HOST = process.env.HOST || '0.0.0.0';
+
+server.on('error', (err) => {
+  if (err.code === 'EPERM' && HOST === '0.0.0.0') {
+    console.warn(`[Server] 0.0.0.0 permission blocked. Retrying on 127.0.0.1:${PORT}...`);
+    server.listen(PORT, '127.0.0.1', () => {
+      console.log(`🚀 FairShare Server Online at http://127.0.0.1:${PORT}`);
+    });
+  } else {
+    console.error('[Server Error]:', err);
+  }
+});
+
+server.listen(PORT, HOST, () => {
   console.log(`\n========================================`);
   console.log(`🚀 FairShare Production Server Online`);
   console.log(`========================================`);
   console.log(`Web App URL      : http://localhost:${PORT}`);
   console.log(`WebSocket Relay  : ws://localhost:${PORT}/fairshare-sync`);
-  console.log(`Listening on all network interfaces (0.0.0.0:${PORT})\n`);
+  console.log(`Listening on ${HOST}:${PORT}\n`);
 });

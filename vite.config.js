@@ -2,6 +2,14 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { WebSocketServer } from 'ws'
 import os from 'os'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const DATA_DIR = path.join(__dirname, 'data')
+const DB_FILE = path.join(DATA_DIR, 'fairshare_ledger_db.json')
 
 function getLocalLanIp() {
   const nets = os.networkInterfaces()
@@ -28,7 +36,32 @@ function getLocalLanIp() {
   return 'localhost'
 }
 
-let cachedLedgerState = null;
+let cachedLedgerState = null
+
+// Initialize permanent database from disk
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true })
+  }
+  if (fs.existsSync(DB_FILE)) {
+    const raw = fs.readFileSync(DB_FILE, 'utf-8')
+    cachedLedgerState = JSON.parse(raw)
+  }
+} catch (err) {
+  console.warn('[Vite DB] Initial disk load notice:', err.message)
+}
+
+function persistStateToDisk(state) {
+  if (!state) return
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+    }
+    fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf-8')
+  } catch (err) {
+    console.warn('[Vite DB] Error saving state to disk:', err.message)
+  }
+}
 
 function mergeLedgerStates(base, update) {
   if (!base) {
@@ -158,6 +191,7 @@ function setupWebSocketRelay(server) {
         const parsed = JSON.parse(msgStr)
         if (parsed.type === 'STATE_UPDATED' && parsed.state) {
           cachedLedgerState = mergeLedgerStates(cachedLedgerState, parsed.state)
+          persistStateToDisk(cachedLedgerState)
         } else if (parsed.type === 'REQUEST_SYNC' && cachedLedgerState) {
           ws.send(JSON.stringify({
             type: 'STATE_UPDATED',
@@ -193,7 +227,15 @@ function handleStateEndpoint(req, res) {
 
   if (req.method === 'GET') {
     res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ state: cachedLedgerState }))
+    res.end(JSON.stringify({
+      state: cachedLedgerState,
+      persistence: {
+        type: 'LOCAL_DISK_JSON',
+        isPermanent: true,
+        provider: 'Local Disk Persistent DB (data/fairshare_ledger_db.json)',
+        dbFile: DB_FILE,
+      }
+    }))
   } else if (req.method === 'POST') {
     let body = ''
     req.on('data', chunk => { body += chunk })
@@ -201,11 +243,18 @@ function handleStateEndpoint(req, res) {
       try {
         const parsed = JSON.parse(body)
         const incomingState = parsed.state || parsed
-        if (incomingState && (incomingState.groups || incomingState.state)) {
+        if (incomingState && (incomingState.groups || incomingState.expenses || incomingState.settlements || incomingState.auditLogs || incomingState.state)) {
           cachedLedgerState = mergeLedgerStates(cachedLedgerState, incomingState)
+          persistStateToDisk(cachedLedgerState)
         }
         res.setHeader('Content-Type', 'application/json')
-        res.end(JSON.stringify({ success: true }))
+        res.end(JSON.stringify({
+          success: true,
+          persistence: {
+            type: 'LOCAL_DISK_JSON',
+            isPermanent: true,
+          }
+        }))
       } catch {
         res.statusCode = 400
         res.end('Invalid JSON')

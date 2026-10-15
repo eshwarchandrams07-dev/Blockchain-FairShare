@@ -252,12 +252,13 @@ class BlockchainStateService {
     const myAddr = (this.myProfile?.address || '').toLowerCase();
     if (!myAddr) return;
 
-    const exists = publicGroup.members.some(m => m.address && m.address.toLowerCase() === myAddr);
-    if (!exists) {
+    const existing = publicGroup.members.find(m => m.address && m.address.toLowerCase() === myAddr);
+    if (!existing) {
       const isFirst = publicGroup.members.length === 0;
       const newMember = {
         address: this.myProfile.address,
         name: this.myProfile.name,
+        email: this.myProfile.email || null,
         role: isFirst ? 'ADMIN' : 'MEMBER',
         avatar: this.myProfile.avatar,
         pin: this.myProfile.pin,
@@ -267,6 +268,10 @@ class BlockchainStateService {
       };
       publicGroup.members.push(newMember);
       this.saveState(true);
+    } else {
+      if (this.myProfile.name && existing.name !== this.myProfile.name) existing.name = this.myProfile.name;
+      if (this.myProfile.avatar && existing.avatar !== this.myProfile.avatar) existing.avatar = this.myProfile.avatar;
+      if (this.myProfile.email && existing.email !== this.myProfile.email) existing.email = this.myProfile.email;
     }
   }
 
@@ -606,6 +611,7 @@ class BlockchainStateService {
       const newMember = {
         address: this.myProfile.address,
         name: this.myProfile.name,
+        email: this.myProfile.email || null,
         role: activeGroup.members.length === 0 ? 'ADMIN' : 'MEMBER',
         avatar: this.myProfile.avatar,
         pin: this.myProfile.pin,
@@ -1083,7 +1089,7 @@ class BlockchainStateService {
   }
 
   getCurrentGroup() {
-    let grp = this.groups.find(g => Number(g.id) === Number(this.currentGroupId));
+    let grp = this.groups.find(g => String(g.id) === String(this.currentGroupId) || (!isNaN(Number(g.id)) && !isNaN(Number(this.currentGroupId)) && Number(g.id) === Number(this.currentGroupId)));
     
     // If the group is private and the user is NOT joined or unlocked, protect it by falling back to the public ledger
     if (grp && grp.isPrivate && !this.isUserJoinedToGroup(grp)) {
@@ -1106,8 +1112,8 @@ class BlockchainStateService {
   }
 
   setCurrentGroupId(id) {
-    const numericId = Number(id);
-    const grp = this.groups.find(g => Number(g.id) === numericId);
+    if (id === null || id === undefined) return;
+    const grp = this.groups.find(g => String(g.id) === String(id) || (!isNaN(Number(g.id)) && !isNaN(Number(id)) && Number(g.id) === Number(id)));
     if (!grp) return;
 
     // Reject switching to a private ledger if user does not have access / is not joined
@@ -1116,14 +1122,14 @@ class BlockchainStateService {
       return;
     }
 
-    this.currentGroupId = numericId;
+    this.currentGroupId = grp.id;
     this.ensureProfileInActiveGroup();
     this.saveState();
   }
 
   isGroupUnlocked(groupId) {
-    const numericId = Number(groupId);
-    const grp = this.groups.find(g => Number(g.id) === numericId);
+    if (groupId === null || groupId === undefined) return false;
+    const grp = this.groups.find(g => String(g.id) === String(groupId) || (!isNaN(Number(g.id)) && !isNaN(Number(groupId)) && Number(g.id) === Number(groupId)));
     if (!grp) return false;
 
     // Public ledgers are always open to view by anyone
@@ -1131,27 +1137,32 @@ class BlockchainStateService {
       return true;
     }
 
-    return this.unlockedGroupIds.includes(numericId);
+    const gIdStr = String(grp.id);
+    const targetStr = String(groupId);
+    return this.unlockedGroupIds.some(id => String(id) === gIdStr || String(id) === targetStr);
   }
 
   unlockGroup(groupId) {
-    const numericId = Number(groupId);
-    if (!this.unlockedGroupIds.includes(numericId)) {
-      this.unlockedGroupIds.push(numericId);
+    if (groupId === null || groupId === undefined) return;
+    const strId = String(groupId);
+    if (!this.unlockedGroupIds.some(id => String(id) === strId)) {
+      this.unlockedGroupIds.push(groupId);
       this.saveUnlockedGroups();
       this.notifyListeners();
     }
   }
 
   lockGroup(groupId) {
-    const numericId = Number(groupId);
-    this.unlockedGroupIds = this.unlockedGroupIds.filter(id => id !== numericId);
+    if (groupId === null || groupId === undefined) return;
+    const strId = String(groupId);
+    this.unlockedGroupIds = this.unlockedGroupIds.filter(id => String(id) !== strId);
     this.saveUnlockedGroups();
     this.notifyListeners();
   }
 
   createGroup(name, description, approvalPolicy, creatorName, isPrivateOrCode = true, customLedgerId = '', customPassword = '') {
-    const newId = this.groups.length > 0 ? Math.max(...this.groups.map(g => g.id)) + 1 : 1;
+    const numericIds = (this.groups || []).map(g => Number(g.id)).filter(n => !isNaN(n));
+    const newId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
     const profile = this.getMyProfile();
 
     let isPrivate = true;
@@ -1192,6 +1203,7 @@ class BlockchainStateService {
         {
           address: this.currentAccount,
           name: creatorName || profile.name,
+          email: profile.email || null,
           role: 'ADMIN',
           avatar: profile.avatar,
           pin: profile.pin,
@@ -1219,7 +1231,7 @@ class BlockchainStateService {
   }
 
   regenerateInviteCode(groupId) {
-    const grp = this.groups.find(g => Number(g.id) === Number(groupId));
+    const grp = this.groups.find(g => String(g.id) === String(groupId) || (!isNaN(Number(g.id)) && !isNaN(Number(groupId)) && Number(g.id) === Number(groupId)));
     if (!grp) return null;
     const newCode = `FS-${Math.floor(1000 + Math.random() * 9000)}`;
     grp.inviteCode = newCode;
@@ -1235,22 +1247,19 @@ class BlockchainStateService {
       const cleanLedgerId = ledgerId.trim().toUpperCase();
       const cleanAlpha = cleanLedgerId.replace(/[^A-Z0-9]/g, '');
       if (cleanLedgerId === 'PUB-101' || cleanLedgerId === 'PUBLIC' || cleanAlpha === 'PUB101' || cleanAlpha === 'PUBLIC') {
-        grp = this.groups.find(g => Number(g.id) === 1 || !g.isPrivate);
+        grp = this.groups.find(g => String(g.id) === '1' || Number(g.id) === 1 || !g.isPrivate);
       } else {
         grp = this.groups.find(g => {
-          if (!g.ledgerId) return false;
-          const gClean = g.ledgerId.trim().toUpperCase();
+          if (!g.ledgerId && !g.id) return false;
+          const gClean = (g.ledgerId || String(g.id)).trim().toUpperCase();
           return gClean === cleanLedgerId || (cleanAlpha && gClean.replace(/[^A-Z0-9]/g, '') === cleanAlpha);
         });
       }
     }
 
-    // 2. If not found by ledgerId, look up by numeric groupId
+    // 2. If not found by ledgerId, look up by groupId
     if (!grp && groupId !== null && groupId !== undefined && String(groupId).trim() !== '') {
-      const numericId = Number(groupId);
-      if (!isNaN(numericId)) {
-        grp = this.groups.find(g => Number(g.id) === numericId);
-      }
+      grp = this.groups.find(g => String(g.id) === String(groupId) || (!isNaN(Number(g.id)) && !isNaN(Number(groupId)) && Number(g.id) === Number(groupId)));
     }
 
     if (!grp) {
@@ -1280,7 +1289,7 @@ class BlockchainStateService {
       return { success: false, pending: true, message: `Searching network for private ledger ${ledgerId || groupId || ''}... Syncing from peer host...` };
     }
 
-    const targetGroupId = Number(grp.id);
+    const targetGroupId = grp.id;
     this.pendingJoinGroupId = null;
     this.pendingJoinKey = null;
     this.pendingJoinLedgerId = null;
@@ -1445,6 +1454,7 @@ class BlockchainStateService {
       const newMember = {
         address: this.myProfile.address,
         name: this.myProfile.name,
+        email: this.myProfile.email || null,
         role: isFirst ? 'ADMIN' : 'MEMBER',
         avatar: this.myProfile.avatar,
         pin: this.myProfile.pin,
@@ -1506,8 +1516,7 @@ class BlockchainStateService {
   // --- BALANCE CALCULATIONS ---
 
   calculateGroupBalances(groupId) {
-    const numId = Number(groupId);
-    const group = (this.groups || []).find(g => Number(g.id) === numId);
+    const group = (this.groups || []).find(g => String(g.id) === String(groupId) || (!isNaN(Number(g.id)) && !isNaN(Number(groupId)) && Number(g.id) === Number(groupId)));
     if (!group || !Array.isArray(group.members)) return [];
 
     const balances = {};
@@ -1518,7 +1527,7 @@ class BlockchainStateService {
     });
 
     // Process Approved Expenses
-    const groupExpenses = (this.expenses || []).filter(e => e && Number(e.groupId) === numId && Number(e.status) === EXPENSE_STATUS.APPROVED);
+    const groupExpenses = (this.expenses || []).filter(e => e && (String(e.groupId) === String(groupId) || (!isNaN(Number(e.groupId)) && !isNaN(Number(groupId)) && Number(e.groupId) === Number(groupId))) && Number(e.status) === EXPENSE_STATUS.APPROVED);
 
     for (const exp of groupExpenses) {
       const payerAddr = (exp.payer || '').toLowerCase();
@@ -1534,7 +1543,7 @@ class BlockchainStateService {
     }
 
     // Process Confirmed Settlements
-    const groupSettlements = (this.settlements || []).filter(s => s && Number(s.groupId) === numId && s.status === 'CONFIRMED');
+    const groupSettlements = (this.settlements || []).filter(s => s && (String(s.groupId) === String(groupId) || (!isNaN(Number(s.groupId)) && !isNaN(Number(groupId)) && Number(s.groupId) === Number(groupId))) && s.status === 'CONFIRMED');
 
     for (const st of groupSettlements) {
       const fromAddr = (st.from || '').toLowerCase();
@@ -2239,7 +2248,7 @@ class BlockchainStateService {
 
   getAuditLogs(groupId) {
     if (!groupId) return this.auditLogs;
-    return this.auditLogs.filter(l => Number(l.groupId) === Number(groupId));
+    return this.auditLogs.filter(l => String(l.groupId) === String(groupId) || (!isNaN(Number(l.groupId)) && !isNaN(Number(groupId)) && Number(l.groupId) === Number(groupId)));
   }
 }
 

@@ -26,3 +26,6 @@ dist-ssr
 # Environment & Secrets
 .env
 .env.*
+
+# Local persistent database
+data/

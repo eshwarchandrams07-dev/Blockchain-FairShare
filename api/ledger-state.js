@@ -199,6 +199,21 @@ function mergeLedgerStates(base, update) {
     merged.settlements = Array.from(setMap.values());
   }
 
+  // Merge audit logs
+  if (Array.isArray(base.auditLogs) && Array.isArray(update.auditLogs)) {
+    const logMap = new Map();
+    for (const l of base.auditLogs) {
+      if (l) logMap.set(`${l.id || l.hash}_${l.timestamp}_${l.action}`, l);
+    }
+    for (const l of update.auditLogs) {
+      if (l) {
+        const key = `${l.id || l.hash}_${l.timestamp}_${l.action}`;
+        if (!logMap.has(key)) logMap.set(key, l);
+      }
+    }
+    merged.auditLogs = Array.from(logMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  }
+
   return merged;
 }
 
@@ -235,7 +250,7 @@ export default async function handler(req, res) {
     try {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const incomingState = body?.state || body;
-      if (incomingState && (incomingState.groups || incomingState.state)) {
+      if (incomingState && (incomingState.groups || incomingState.expenses || incomingState.settlements || incomingState.auditLogs || incomingState.state)) {
         // Load latest to avoid race conditions
         const currentPersisted = (await loadPersistedState(adapter)) || inMemoryCachedState;
         inMemoryCachedState = mergeLedgerStates(currentPersisted, incomingState);

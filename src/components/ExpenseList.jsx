@@ -37,7 +37,7 @@ export default function ExpenseList({
   };
 
   // Filter expenses for current group
-  const groupExpenses = expenses.filter(e => e.groupId === currentGroup.id);
+  const groupExpenses = (expenses || []).filter(e => e && currentGroup && e.groupId === currentGroup.id);
 
   // Available categories in this group
   const availableCategories = Array.from(new Set(groupExpenses.map(e => e.category).filter(Boolean)));

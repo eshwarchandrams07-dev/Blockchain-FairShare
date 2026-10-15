@@ -17,7 +17,7 @@ export default function ConsensusHub({
   const [filter, setFilter] = useState('ALL'); // ALL, NEED_MY_SIGNATURE, SEALED, CONTESTED
   const [searchQuery, setSearchQuery] = useState('');
 
-  const groupExpenses = expenses.filter(e => e.groupId === currentGroup.id);
+  const groupExpenses = (expenses || []).filter(e => e && currentGroup && e.groupId === currentGroup.id);
 
   // Helper to safely get votes array
   const getExpenseVotes = (e) => {
