@@ -69,6 +69,7 @@ export default function App() {
   const [isNetworkModalOpen, setIsNetworkModalOpen] = useState(false);
   const [isIpfsModalOpen, setIsIpfsModalOpen] = useState(false);
   const [isArchitectureModalOpen, setIsArchitectureModalOpen] = useState(false);
+  const [architectureInitialTab, setArchitectureInitialTab] = useState('architecture');
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [disputeModalData, setDisputeModalData] = useState(null); // { expense, isResolving }
   const [correctionModalExpense, setCorrectionModalExpense] = useState(null);
@@ -342,8 +343,8 @@ export default function App() {
     return res;
   };
 
-  const handleEnterPrivateLedger = (ledgerId, password, memberDisplayName) => {
-    const res = blockchainService.enterLedgerByCredentials(ledgerId, password, memberDisplayName);
+  const handleEnterPrivateLedger = async (ledgerId, password, memberDisplayName) => {
+    const res = await blockchainService.enterLedgerByCredentials(ledgerId, password, memberDisplayName);
     if (res && res.success) {
       addToast(
         'Private Ledger Unlocked',
@@ -425,6 +426,41 @@ export default function App() {
     );
   };
 
+  const handleOpenArchitectureModal = (tab = 'architecture') => {
+    setArchitectureInitialTab(tab);
+    setIsArchitectureModalOpen(true);
+  };
+
+  const handleExportBackup = () => {
+    const json = blockchainService.exportLedgerBackup();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fairshare-ledger-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addToast('Backup Exported', 'Saved immutable ledger snapshot to your device', 'success');
+  };
+
+  const handleImportBackup = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const res = blockchainService.importLedgerBackup(e.target.result);
+      if (res.success) {
+        addToast('Backup Restored', `Successfully imported ${res.count} ledgers and merged all transactions!`, 'success');
+        try {
+          confetti({ particleCount: 60, spread: 60, origin: { y: 0.85 } });
+        } catch {}
+      } else {
+        addToast('Restore Failed', res.error, 'error');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const pendingBlocksCount = (expenses || []).filter(e => e && e.groupId === currentGroup?.id && e.status === 0).length;
 
   if (!currentUser) {
@@ -452,7 +488,7 @@ export default function App() {
         onOpenConnectDevicesModal={() => setIsConnectDevicesModalOpen(true)}
         onOpenNetworkModal={() => setIsNetworkModalOpen(true)}
         onOpenIpfsModal={() => setIsIpfsModalOpen(true)}
-        onOpenArchitectureModal={() => setIsArchitectureModalOpen(true)}
+        onOpenArchitectureModal={handleOpenArchitectureModal}
         onOpenEnterLedgerModal={() => setIsEnterLedgerModalOpen(true)}
         currentGroup={currentGroup}
         groups={groups}
@@ -900,8 +936,12 @@ export default function App() {
 
       {/* 4-Tier Architecture & System Specs Modal */}
       <ArchitectureModal
+        key={architectureInitialTab}
         isOpen={isArchitectureModalOpen}
         onClose={() => setIsArchitectureModalOpen(false)}
+        onExportBackup={handleExportBackup}
+        onImportBackup={handleImportBackup}
+        activeTabInitial={architectureInitialTab}
       />
 
       {/* Enter Private Ledger Modal */}

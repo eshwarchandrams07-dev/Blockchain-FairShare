@@ -60,21 +60,26 @@ export default function PrivateGroupGate({
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      const res = onUnlock(
-        matchingGroup?.id || currentGroup?.id,
-        cleanPass,
-        cleanId,
-        displayNameInput.trim()
-      );
-      setIsSubmitting(false);
+    setTimeout(async () => {
+      try {
+        const res = await onUnlock(
+          matchingGroup?.id || currentGroup?.id,
+          cleanPass,
+          cleanId,
+          displayNameInput.trim()
+        );
+        setIsSubmitting(false);
 
-      if (res && res.pending) {
-        setErrorMsg(res.message || 'Connecting to peer host to synchronize private ledger...');
-      } else if (res && !res.success) {
-        setErrorMsg(res.error || 'Incorrect Ledger ID or Password. Access denied.');
+        if (res && res.pending) {
+          setErrorMsg(res.message || 'Connecting to cloud database & peer host to synchronize private ledger...');
+        } else if (res && !res.success) {
+          setErrorMsg(res.error || 'Incorrect Ledger ID or Password. Access denied.');
+        }
+      } catch (err) {
+        setIsSubmitting(false);
+        setErrorMsg('Error: ' + (err.message || 'Unknown network error'));
       }
-    }, 200);
+    }, 150);
   };
 
   const handleAutoFill = () => {

@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 
 const AUTH_USER_KEY = 'fairshare_auth_user_v1';
 const SAVED_ACCOUNTS_KEY = 'fairshare_saved_accounts_v1';
+const GOOGLE_CLIENT_ID_KEY = 'fairshare_google_client_id';
 
 // Default initial Google profiles for instant 1-tap preview
 export const DEFAULT_GOOGLE_PROFILES = [
@@ -14,6 +15,7 @@ export const DEFAULT_GOOGLE_PROFILES = [
     upiId: 'eshwar@okhdfcbank',
     pin: '1234',
     badge: 'Founder / Admin',
+    googleSub: '108293847291028374829',
   },
   {
     name: 'Priya Sharma',
@@ -24,6 +26,7 @@ export const DEFAULT_GOOGLE_PROFILES = [
     upiId: 'priya.sharma@paytm',
     pin: '4321',
     badge: 'Verified Member',
+    googleSub: '109823471029384729103',
   },
   {
     name: 'Rohan Verma',
@@ -34,6 +37,7 @@ export const DEFAULT_GOOGLE_PROFILES = [
     upiId: 'rohanv@okaxis',
     pin: '7777',
     badge: 'Verified Member',
+    googleSub: '10748291029384729104',
   },
   {
     name: 'Ananya Iyer',
@@ -44,16 +48,20 @@ export const DEFAULT_GOOGLE_PROFILES = [
     upiId: 'ananya.iyer@icici',
     pin: '9999',
     badge: 'Verified Member',
+    googleSub: '10639201928374619285',
   },
 ];
 
 /**
- * Deterministically derive an Ethereum wallet from a user's email
- * Ensures the user keeps the same blockchain identity across all devices
+ * Deterministically derive an Ethereum wallet from a user's Google Identity (email or sub)
+ * Ensures the user keeps the exact same blockchain identity across all devices & sessions
  */
-export function deriveWalletFromEmail(email) {
+export function deriveWalletFromEmail(email, googleSub = null) {
   const cleanEmail = (email || '').trim().toLowerCase();
-  const seed = ethers.id(`fairshare_auth_v1:${cleanEmail}`);
+  const seedString = googleSub 
+    ? `fairshare_google_v1:${cleanEmail}:${googleSub}`
+    : `fairshare_auth_v1:${cleanEmail}`;
+  const seed = ethers.id(seedString);
   const wallet = new ethers.Wallet(seed);
   return {
     address: wallet.address,
@@ -61,10 +69,57 @@ export function deriveWalletFromEmail(email) {
   };
 }
 
+/**
+ * Safely parse a Google JWT ID token payload from Google Identity Services
+ */
+export function parseGoogleJwt(token) {
+  try {
+    if (!token || typeof token !== 'string') return null;
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (err) {
+    console.warn('Failed to parse Google JWT token:', err);
+    return null;
+  }
+}
+
 class AuthService {
   constructor() {
     this.currentUser = this.loadCurrentUser();
     this.listeners = new Set();
+  }
+
+  getGoogleClientId() {
+    if (typeof window === 'undefined') return '';
+    try {
+      return (
+        localStorage.getItem(GOOGLE_CLIENT_ID_KEY) ||
+        (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) ||
+        ''
+      );
+    } catch {
+      return '';
+    }
+  }
+
+  setGoogleClientId(clientId) {
+    if (typeof window === 'undefined') return;
+    try {
+      if (clientId && clientId.trim()) {
+        localStorage.setItem(GOOGLE_CLIENT_ID_KEY, clientId.trim());
+      } else {
+        localStorage.removeItem(GOOGLE_CLIENT_ID_KEY);
+      }
+    } catch {}
   }
 
   loadCurrentUser() {
@@ -117,15 +172,45 @@ class AuthService {
     return Boolean(this.currentUser && this.currentUser.address);
   }
 
-  loginWithGoogle({ name, email, avatar = '👤', picture = null, pin = '1234', upiId = null }) {
+  /**
+   * Log in using an authentic Google OAuth credential token (from Google Identity Services)
+   */
+  loginWithGoogleCredential(credentialToken) {
+    const payload = parseGoogleJwt(credentialToken);
+    if (!payload || !payload.email) {
+      throw new Error('Invalid Google credential token received.');
+    }
+
+    return this.loginWithGoogle({
+      name: payload.name || payload.given_name || payload.email.split('@')[0],
+      email: payload.email,
+      picture: payload.picture || null,
+      avatar: '🌐',
+      googleSub: payload.sub || null,
+      emailVerified: Boolean(payload.email_verified),
+    });
+  }
+
+  loginWithGoogle({
+    name,
+    email,
+    avatar = '👤',
+    picture = null,
+    pin = '1234',
+    upiId = null,
+    googleSub = null,
+    emailVerified = true
+  }) {
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanName = (name || cleanEmail.split('@')[0] || 'User').trim();
-    const wallet = deriveWalletFromEmail(cleanEmail);
+    const handle = `@${cleanEmail.split('@')[0].replace(/[^a-z0-9_]/g, '')}`;
+    const wallet = deriveWalletFromEmail(cleanEmail, googleSub);
 
     const userObj = {
       id: `usr_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`,
       email: cleanEmail,
       name: cleanName,
+      handle,
       avatar: avatar || '👤',
       picture: picture || null,
       address: wallet.address,
@@ -133,6 +218,8 @@ class AuthService {
       pin: String(pin || '1234'),
       upiId: upiId || `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
       provider: 'google',
+      googleSub: googleSub || null,
+      emailVerified: Boolean(emailVerified),
       tokenBalance: 75000,
       loggedInAt: Date.now(),
     };

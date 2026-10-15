@@ -1366,15 +1366,74 @@ class BlockchainStateService {
 
   /**
    * Enter any private ledger directly by Ledger ID and Password
+   * Supports immediate cloud database lookup if ledger is not yet in local browser storage
    */
-  enterLedgerByCredentials(ledgerId, password, memberDisplayName = null) {
+  async enterLedgerByCredentials(ledgerId, password, memberDisplayName = null) {
     if (!ledgerId || !ledgerId.trim()) {
       return { success: false, error: 'Please enter the Private Ledger ID (e.g. APT-402, GOA-2026).' };
     }
     if (!password || !password.trim()) {
       return { success: false, error: 'Please enter the Security Password for this private ledger.' };
     }
-    return this.joinGroup(null, password.trim(), ledgerId.trim().toUpperCase(), memberDisplayName);
+
+    const cleanId = ledgerId.trim().toUpperCase();
+    const cleanPass = password.trim();
+
+    // 1. Check local in-memory groups
+    let res = this.joinGroup(null, cleanPass, cleanId, memberDisplayName);
+    if (res && res.success) return res;
+
+    // 2. If not found locally, query the permanent cloud database (/api/ledger-state)
+    if (!res || !res.success) {
+      try {
+        const remoteRes = await fetch('/api/ledger-state');
+        if (remoteRes.ok) {
+          const data = await remoteRes.json();
+          if (data && data.state && Array.isArray(data.state.groups)) {
+            this.mergeRemoteState(data.state);
+            this.saveState(true);
+            res = this.joinGroup(null, cleanPass, cleanId, memberDisplayName);
+            if (res && res.success) return res;
+          }
+        }
+      } catch (err) {
+        console.warn('Notice querying cloud database for private ledger:', err);
+      }
+    }
+
+    return res;
+  }
+
+  exportLedgerBackup() {
+    const backup = {
+      app: 'FairShare',
+      version: '5.0',
+      exportedAt: new Date().toISOString(),
+      timestamp: Date.now(),
+      state: {
+        groups: this.groups,
+        expenses: this.expenses,
+        settlements: this.settlements,
+        auditLogs: this.auditLogs,
+        currentGroupId: this.currentGroupId,
+      },
+    };
+    return JSON.stringify(backup, null, 2);
+  }
+
+  importLedgerBackup(jsonString) {
+    try {
+      const parsed = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+      const state = parsed.state || parsed;
+      if (!state || (!state.groups && !state.expenses)) {
+        throw new Error('Invalid backup format: missing groups or expenses');
+      }
+      this.mergeRemoteState(state);
+      this.saveState();
+      return { success: true, count: state.groups?.length || 0 };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   }
 
   ensureMemberInGroup(grp) {

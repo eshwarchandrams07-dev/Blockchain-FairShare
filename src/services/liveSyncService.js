@@ -17,6 +17,7 @@ class LiveSyncService {
     this.lastReceivedTimestamp = 0;
     this.deviceId = 'dev_' + Math.random().toString(36).substring(2, 9);
     this._onceConnectedCallbacks = []; // Queued callbacks to fire when WebSocket first connects
+    this.persistenceInfo = { isPermanent: false, provider: 'Syncing...', type: 'CHECKING' };
 
     this.initBroadcastChannel();
     this.initWebSocket();
@@ -41,6 +42,9 @@ class LiveSyncService {
       fetch('/api/ledger-state')
         .then(res => res.ok ? res.json() : null)
         .then(data => {
+          if (data && data.persistence) {
+            this.persistenceInfo = data.persistence;
+          }
           if (data && data.state) {
             this.handleIncomingMessage({
               type: 'STATE_UPDATED',
@@ -206,6 +210,10 @@ class LiveSyncService {
 
   getStatus() {
     return this.status;
+  }
+
+  getPersistenceInfo() {
+    return this.persistenceInfo;
   }
 }
 

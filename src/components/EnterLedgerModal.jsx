@@ -44,18 +44,23 @@ export default function EnterLedgerModal({
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      const res = onEnterLedger(cleanId, cleanPass, displayName.trim());
-      setIsSubmitting(false);
+    setTimeout(async () => {
+      try {
+        const res = await onEnterLedger(cleanId, cleanPass, displayName.trim());
+        setIsSubmitting(false);
 
-      if (res && res.pending) {
-        setErrorMsg(res.message || 'Connecting to network peers to synchronize private ledger...');
-      } else if (res && !res.success) {
-        setErrorMsg(res.error || 'Incorrect Ledger ID or Password. Access denied.');
-      } else if (res && res.success) {
-        onClose();
+        if (res && res.pending) {
+          setErrorMsg(res.message || 'Connecting to cloud database & network peers to synchronize private ledger...');
+        } else if (res && !res.success) {
+          setErrorMsg(res.error || 'Incorrect Ledger ID or Password. Access denied.');
+        } else if (res && res.success) {
+          onClose();
+        }
+      } catch (err) {
+        setIsSubmitting(false);
+        setErrorMsg('Error verifying credentials: ' + (err.message || 'Unknown network error'));
       }
-    }, 200);
+    }, 150);
   };
 
 

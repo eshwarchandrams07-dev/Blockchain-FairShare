@@ -50,7 +50,36 @@ const MIME_TYPES = {
   '.woff2': 'font/woff2',
 };
 
+const DATA_DIR = path.join(__dirname, 'data');
+const DB_FILE = path.join(DATA_DIR, 'fairshare_ledger_db.json');
+
 let cachedLedgerState = null;
+
+// Initialize permanent database from disk
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (fs.existsSync(DB_FILE)) {
+    const raw = fs.readFileSync(DB_FILE, 'utf-8');
+    cachedLedgerState = JSON.parse(raw);
+    console.log(`[Database] Loaded permanent ledger from disk (${cachedLedgerState?.groups?.length || 0} groups, ${cachedLedgerState?.expenses?.length || 0} expenses)`);
+  }
+} catch (err) {
+  console.warn('[Database] Initial disk load notice:', err.message);
+}
+
+function persistStateToDisk(state) {
+  if (!state) return;
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[Database] Error saving state to disk:', err.message);
+  }
+}
 
 function mergeLedgerStates(base, update) {
   if (!base) {
@@ -164,7 +193,15 @@ const server = http.createServer((req, res) => {
   if (reqPath === '/api/ledger-state') {
     if (req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ state: cachedLedgerState }));
+      res.end(JSON.stringify({
+        state: cachedLedgerState,
+        persistence: {
+          type: 'LOCAL_DISK_JSON',
+          isPermanent: true,
+          provider: 'Local Disk Persistent DB (data/fairshare_ledger_db.json)',
+          dbFile: DB_FILE,
+        }
+      }));
       return;
     } else if (req.method === 'POST') {
       let body = '';
@@ -175,9 +212,16 @@ const server = http.createServer((req, res) => {
           const incomingState = parsed.state || parsed;
           if (incomingState && (incomingState.groups || incomingState.state)) {
             cachedLedgerState = mergeLedgerStates(cachedLedgerState, incomingState);
+            persistStateToDisk(cachedLedgerState);
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: true }));
+          res.end(JSON.stringify({
+            success: true,
+            persistence: {
+              type: 'LOCAL_DISK_JSON',
+              isPermanent: true,
+            }
+          }));
         } catch {
           res.writeHead(400, { 'Content-Type': 'text/plain' });
           res.end('Invalid JSON');
@@ -258,6 +302,7 @@ wss.on('connection', (ws) => {
       const parsed = JSON.parse(msgStr);
       if (parsed.type === 'STATE_UPDATED' && parsed.state) {
         cachedLedgerState = mergeLedgerStates(cachedLedgerState, parsed.state);
+        persistStateToDisk(cachedLedgerState);
       } else if (parsed.type === 'REQUEST_SYNC' && cachedLedgerState) {
         ws.send(JSON.stringify({
           type: 'STATE_UPDATED',

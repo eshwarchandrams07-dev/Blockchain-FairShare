@@ -17,7 +17,8 @@ import {
   HardDrive, 
   RotateCcw, 
   Sparkles,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Database
 } from 'lucide-react';
 import { shortenAddress, formatMaskedCents } from '../utils/cryptoUtils';
 import { blockchainService } from '../services/blockchainState';
@@ -506,11 +507,39 @@ export default function Navbar({
                   <span>IPFS Storage Config</span>
                 </button>
 
+                {/* Cloud Database & Backups */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenArchitectureModal('persistence');
+                    setIsToolsMenuOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '13px',
+                    color: '#059669',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#ecfdf5'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <Database size={14} style={{ color: '#10b981' }} />
+                  <span>Cloud Database &amp; Backups</span>
+                </button>
+
                 {/* Architecture & Specs */}
                 <button
                   type="button"
                   onClick={() => {
-                    onOpenArchitectureModal();
+                    onOpenArchitectureModal('architecture');
                     setIsToolsMenuOpen(false);
                   }}
                   style={{

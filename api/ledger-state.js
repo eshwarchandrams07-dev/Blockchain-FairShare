@@ -1,4 +1,123 @@
-let cachedLedgerState = null;
+// Multi-Backend Permanent Storage Engine for FairShare on Vercel & Node.js
+
+let inMemoryCachedState = null;
+let lastSavedTimestamp = Date.now();
+
+function getPersistenceAdapter() {
+  const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (kvUrl && kvToken) {
+    return {
+      type: 'UPSTASH_KV',
+      isPermanent: true,
+      provider: 'Vercel KV / Upstash Redis (Permanent Cloud Storage)',
+      kvUrl: kvUrl.replace(/\/$/, ''),
+      kvToken,
+    };
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (supabaseUrl && supabaseKey) {
+    return {
+      type: 'SUPABASE_POSTGRES',
+      isPermanent: true,
+      provider: 'Supabase PostgreSQL (Permanent Cloud Storage)',
+      supabaseUrl: supabaseUrl.replace(/\/$/, ''),
+      supabaseKey,
+    };
+  }
+
+  return {
+    type: 'SERVER_CACHE',
+    isPermanent: false,
+    provider: 'Server Memory Cache (Configure Vercel KV or Supabase for permanent cloud retention)',
+  };
+}
+
+async function loadPersistedState(adapter) {
+  if (adapter.type === 'UPSTASH_KV') {
+    try {
+      const res = await fetch(`${adapter.kvUrl}/get/fairshare_global_ledger_v1`, {
+        headers: { Authorization: `Bearer ${adapter.kvToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.result) {
+          const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+          if (parsed && (parsed.groups || parsed.expenses)) {
+            return parsed;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load from Upstash KV:', err);
+    }
+  }
+
+  if (adapter.type === 'SUPABASE_POSTGRES') {
+    try {
+      const res = await fetch(`${adapter.supabaseUrl}/rest/v1/fairshare_ledgers?id=eq.global&select=state`, {
+        headers: {
+          apikey: adapter.supabaseKey,
+          Authorization: `Bearer ${adapter.supabaseKey}`,
+        },
+      });
+      if (res.ok) {
+        const rows = await res.json();
+        if (Array.isArray(rows) && rows[0]?.state) {
+          return rows[0].state;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load from Supabase:', err);
+    }
+  }
+
+  return inMemoryCachedState;
+}
+
+async function savePersistedState(adapter, state) {
+  if (adapter.type === 'UPSTASH_KV') {
+    try {
+      await fetch(`${adapter.kvUrl}/set/fairshare_global_ledger_v1`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${adapter.kvToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(typeof state === 'string' ? state : JSON.stringify(state)),
+      });
+      return true;
+    } catch (err) {
+      console.warn('Failed to save to Upstash KV:', err);
+    }
+  }
+
+  if (adapter.type === 'SUPABASE_POSTGRES') {
+    try {
+      await fetch(`${adapter.supabaseUrl}/rest/v1/fairshare_ledgers`, {
+        method: 'POST',
+        headers: {
+          apikey: adapter.supabaseKey,
+          Authorization: `Bearer ${adapter.supabaseKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify({
+          id: 'global',
+          state,
+          updated_at: new Date().toISOString(),
+        }),
+      });
+      return true;
+    } catch (err) {
+      console.warn('Failed to save to Supabase:', err);
+    }
+  }
+
+  return false;
+}
 
 function mergeLedgerStates(base, update) {
   if (!base) {
@@ -47,6 +166,10 @@ function mergeLedgerStates(base, update) {
           }
         }
         existing.members = Array.from(memberMap.values());
+        // Preserve private keys and ledger IDs
+        if (g.isPrivate) existing.isPrivate = true;
+        if (g.ledgerId) existing.ledgerId = g.ledgerId;
+        if (g.password) existing.password = g.password;
         groupMap.set(g.id, existing);
       }
     }
@@ -79,7 +202,7 @@ function mergeLedgerStates(base, update) {
   return merged;
 }
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -89,8 +212,23 @@ export default function handler(req, res) {
     return res.status(204).end();
   }
 
+  const adapter = getPersistenceAdapter();
+
   if (req.method === 'GET') {
-    return res.status(200).json({ state: cachedLedgerState });
+    const persisted = await loadPersistedState(adapter);
+    if (persisted) {
+      inMemoryCachedState = persisted;
+    }
+
+    return res.status(200).json({
+      state: inMemoryCachedState,
+      persistence: {
+        type: adapter.type,
+        isPermanent: adapter.isPermanent,
+        provider: adapter.provider,
+        lastSaved: lastSavedTimestamp,
+      },
+    });
   }
 
   if (req.method === 'POST') {
@@ -98,9 +236,25 @@ export default function handler(req, res) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const incomingState = body?.state || body;
       if (incomingState && (incomingState.groups || incomingState.state)) {
-        cachedLedgerState = mergeLedgerStates(cachedLedgerState, incomingState);
+        // Load latest to avoid race conditions
+        const currentPersisted = (await loadPersistedState(adapter)) || inMemoryCachedState;
+        inMemoryCachedState = mergeLedgerStates(currentPersisted, incomingState);
+        lastSavedTimestamp = Date.now();
+
+        // Write to permanent cloud database if configured
+        if (adapter.isPermanent) {
+          await savePersistedState(adapter, inMemoryCachedState);
+        }
       }
-      return res.status(200).json({ success: true });
+
+      return res.status(200).json({
+        success: true,
+        persistence: {
+          type: adapter.type,
+          isPermanent: adapter.isPermanent,
+          provider: adapter.provider,
+        },
+      });
     } catch {
       return res.status(400).send('Invalid JSON');
     }
