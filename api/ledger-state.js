@@ -38,14 +38,19 @@ function getPersistenceAdapter() {
 async function loadPersistedState(adapter) {
   if (adapter.type === 'UPSTASH_KV') {
     try {
-      const res = await fetch(`${adapter.kvUrl}/get/fairshare_global_ledger_v1`, {
+      const res = await fetch(`${adapter.kvUrl}/get/fairshare_global_ledger_v2`, {
         headers: { Authorization: `Bearer ${adapter.kvToken}` },
       });
       if (res.ok) {
         const data = await res.json();
         if (data && data.result) {
           const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-          if (parsed && (parsed.groups || parsed.expenses)) {
+          if (parsed) {
+            parsed.groups = (parsed.groups || []).filter(g => Number(g.id) === 1);
+            parsed.expenses = (parsed.expenses || []).filter(e => !e.groupId || Number(e.groupId) === 1);
+            parsed.settlements = (parsed.settlements || []).filter(s => !s.groupId || Number(s.groupId) === 1);
+            parsed.auditLogs = (parsed.auditLogs || []).filter(l => !l.groupId || Number(l.groupId) === 1);
+            parsed.currentGroupId = 1;
             return parsed;
           }
         }
@@ -66,12 +71,26 @@ async function loadPersistedState(adapter) {
       if (res.ok) {
         const rows = await res.json();
         if (Array.isArray(rows) && rows[0]?.state) {
-          return rows[0].state;
+          const state = rows[0].state;
+          state.groups = (state.groups || []).filter(g => Number(g.id) === 1);
+          state.expenses = (state.expenses || []).filter(e => !e.groupId || Number(e.groupId) === 1);
+          state.settlements = (state.settlements || []).filter(s => !s.groupId || Number(s.groupId) === 1);
+          state.auditLogs = (state.auditLogs || []).filter(l => !l.groupId || Number(l.groupId) === 1);
+          state.currentGroupId = 1;
+          return state;
         }
       }
     } catch (err) {
       console.warn('Failed to load from Supabase:', err);
     }
+  }
+
+  if (inMemoryCachedState) {
+    inMemoryCachedState.groups = (inMemoryCachedState.groups || []).filter(g => Number(g.id) === 1);
+    inMemoryCachedState.expenses = (inMemoryCachedState.expenses || []).filter(e => !e.groupId || Number(e.groupId) === 1);
+    inMemoryCachedState.settlements = (inMemoryCachedState.settlements || []).filter(s => !s.groupId || Number(s.groupId) === 1);
+    inMemoryCachedState.auditLogs = (inMemoryCachedState.auditLogs || []).filter(l => !l.groupId || Number(l.groupId) === 1);
+    inMemoryCachedState.currentGroupId = 1;
   }
 
   return inMemoryCachedState;
@@ -80,7 +99,7 @@ async function loadPersistedState(adapter) {
 async function savePersistedState(adapter, state) {
   if (adapter.type === 'UPSTASH_KV') {
     try {
-      await fetch(`${adapter.kvUrl}/set/fairshare_global_ledger_v1`, {
+      await fetch(`${adapter.kvUrl}/set/fairshare_global_ledger_v2`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${adapter.kvToken}`,
@@ -123,10 +142,11 @@ function mergeLedgerStates(base, update) {
   if (!base) {
     if (!update) return null;
     return {
-      groups: Array.isArray(update.groups) ? update.groups : [],
-      expenses: Array.isArray(update.expenses) ? update.expenses : [],
-      settlements: Array.isArray(update.settlements) ? update.settlements : [],
-      auditLogs: Array.isArray(update.auditLogs) ? update.auditLogs : [],
+      groups: (Array.isArray(update.groups) ? update.groups : []).filter(g => Number(g.id) === 1),
+      expenses: (Array.isArray(update.expenses) ? update.expenses : []).filter(e => !e.groupId || Number(e.groupId) === 1),
+      settlements: (Array.isArray(update.settlements) ? update.settlements : []).filter(s => !s.groupId || Number(s.groupId) === 1),
+      auditLogs: (Array.isArray(update.auditLogs) ? update.auditLogs : []).filter(l => !l.groupId || Number(l.groupId) === 1),
+      currentGroupId: 1,
     };
   }
   if (!update) return base;
@@ -134,10 +154,11 @@ function mergeLedgerStates(base, update) {
   const merged = {
     ...base,
     ...update,
-    groups: Array.isArray(update.groups) ? update.groups : (Array.isArray(base.groups) ? base.groups : []),
-    expenses: Array.isArray(update.expenses) ? update.expenses : (Array.isArray(base.expenses) ? base.expenses : []),
-    settlements: Array.isArray(update.settlements) ? update.settlements : (Array.isArray(base.settlements) ? base.settlements : []),
-    auditLogs: Array.isArray(update.auditLogs) ? update.auditLogs : (Array.isArray(base.auditLogs) ? base.auditLogs : []),
+    currentGroupId: 1,
+    groups: (Array.isArray(update.groups) ? update.groups : (Array.isArray(base.groups) ? base.groups : [])).filter(g => Number(g.id) === 1),
+    expenses: (Array.isArray(update.expenses) ? update.expenses : (Array.isArray(base.expenses) ? base.expenses : [])).filter(e => !e.groupId || Number(e.groupId) === 1),
+    settlements: (Array.isArray(update.settlements) ? update.settlements : (Array.isArray(base.settlements) ? base.settlements : [])).filter(s => !s.groupId || Number(s.groupId) === 1),
+    auditLogs: (Array.isArray(update.auditLogs) ? update.auditLogs : (Array.isArray(base.auditLogs) ? base.auditLogs : [])).filter(l => !l.groupId || Number(l.groupId) === 1),
   };
 
   // Merge groups and members by address

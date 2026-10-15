@@ -119,7 +119,12 @@ export function getDeviceProfile() {
 
 class BlockchainStateService {
   constructor() {
-    this.storageKey = 'fairshare_blockchain_v5_publicledger';
+    this.storageKey = 'fairshare_blockchain_v6_publicledger';
+    try {
+      localStorage.removeItem('fairshare_blockchain_v5_publicledger');
+      localStorage.removeItem('fairshare_blockchain_v4_openstate');
+      localStorage.removeItem('fairshare_blockchain_state_v3');
+    } catch {}
     const authUser = authService.getCurrentUser();
     this.myProfile = authUser ? {
       address: authUser.address,
@@ -303,76 +308,80 @@ class BlockchainStateService {
     let hasLocalChanges = false;
     let hasRemoteAdditions = false;
 
-    // 1. Merge groups and members
-    for (const rGroup of remoteState.groups) {
-      let lGroup = this.groups.find(g => Number(g.id) === Number(rGroup.id) || (g.ledgerId && rGroup.ledgerId && g.ledgerId === rGroup.ledgerId));
+    // We only keep and merge Group #1 (Public Ledger). All other groups are wiped.
+    const rGroup = remoteState.groups.find(g => Number(g.id) === 1);
+    let lGroup = this.groups.find(g => Number(g.id) === 1);
 
-      if (!lGroup) {
-        this.groups.push(rGroup);
-        hasRemoteAdditions = true;
-      } else {
-        if (!Array.isArray(lGroup.members)) lGroup.members = [];
-        if (!Array.isArray(rGroup.members)) rGroup.members = [];
+    if (!lGroup && rGroup) {
+      this.groups = [rGroup];
+      lGroup = this.groups[0];
+      hasRemoteAdditions = true;
+    } else if (lGroup && rGroup) {
+      this.groups = [lGroup]; // Enforce only Public Ledger exists
+      if (!Array.isArray(lGroup.members)) lGroup.members = [];
+      if (!Array.isArray(rGroup.members)) rGroup.members = [];
 
-        const localMemberMap = new Map();
-        for (const m of lGroup.members) {
-          if (m && m.address) {
-            localMemberMap.set(m.address.toLowerCase(), m);
-          }
-        }
-
-        for (const rm of rGroup.members) {
-          if (!rm || !rm.address) continue;
-          const key = rm.address.toLowerCase();
-          if (!localMemberMap.has(key)) {
-            localMemberMap.set(key, rm);
-            hasRemoteAdditions = true;
-          } else {
-            const existing = localMemberMap.get(key);
-            localMemberMap.set(key, { ...existing, ...rm });
-          }
-        }
-
-        // Always ensure this device's profile is in the public ledger
-        if (Number(lGroup.id) === 1 && this.myProfile && this.myProfile.address) {
-          const myKey = this.myProfile.address.toLowerCase();
-          if (!localMemberMap.has(myKey)) {
-            localMemberMap.set(myKey, {
-              address: this.myProfile.address,
-              name: this.myProfile.name,
-              role: localMemberMap.size === 0 ? 'ADMIN' : 'MEMBER',
-              avatar: this.myProfile.avatar,
-              pin: this.myProfile.pin,
-              upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-              tokenBalance: this.myProfile.tokenBalance || 50000,
-              joinedAt: Date.now(),
-            });
-            hasLocalChanges = true;
-          }
-        }
-
-        // Check if local had members missing remotely
-        for (const lm of lGroup.members) {
-          if (lm && lm.address && !rGroup.members.some(rm => rm && rm.address && rm.address.toLowerCase() === lm.address.toLowerCase())) {
-            hasLocalChanges = true;
-          }
-        }
-
-        if (Number(lGroup.id) === 1) {
-          lGroup.members = this.sanitizeGoogleMembers(Array.from(localMemberMap.values()));
-        } else {
-          lGroup.members = Array.from(localMemberMap.values());
+      const localMemberMap = new Map();
+      for (const m of lGroup.members) {
+        if (m && m.address) {
+          localMemberMap.set(m.address.toLowerCase(), m);
         }
       }
+
+      for (const rm of rGroup.members) {
+        if (!rm || !rm.address) continue;
+        const key = rm.address.toLowerCase();
+        if (!localMemberMap.has(key)) {
+          localMemberMap.set(key, rm);
+          hasRemoteAdditions = true;
+        } else {
+          const existing = localMemberMap.get(key);
+          localMemberMap.set(key, { ...existing, ...rm });
+        }
+      }
+
+      // Always ensure this device's profile is in the public ledger
+      if (this.myProfile && this.myProfile.address) {
+        const myKey = this.myProfile.address.toLowerCase();
+        if (!localMemberMap.has(myKey)) {
+          localMemberMap.set(myKey, {
+            address: this.myProfile.address,
+            name: this.myProfile.name,
+            role: localMemberMap.size === 0 ? 'ADMIN' : 'MEMBER',
+            avatar: this.myProfile.avatar,
+            pin: this.myProfile.pin,
+            upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
+            tokenBalance: this.myProfile.tokenBalance || 75000,
+            joinedAt: Date.now(),
+          });
+          hasLocalChanges = true;
+        }
+      }
+
+      // Check if local had members missing remotely
+      for (const lm of lGroup.members) {
+        if (lm && lm.address && !rGroup.members.some(rm => rm && rm.address && rm.address.toLowerCase() === lm.address.toLowerCase())) {
+          hasLocalChanges = true;
+        }
+      }
+
+      lGroup.members = this.sanitizeGoogleMembers(Array.from(localMemberMap.values()));
+    } else {
+      this.groups = this.groups.filter(g => Number(g.id) === 1);
     }
 
-    // 2. Merge expenses
+    // 2. Merge expenses (only for Group #1)
     if (Array.isArray(remoteState.expenses)) {
       const expMap = new Map();
-      for (const e of this.expenses) expMap.set(String(e.id), e);
+      for (const e of this.expenses) {
+        if (!e.groupId || Number(e.groupId) === 1) {
+          expMap.set(String(e.id), e);
+        }
+      }
 
       for (const re of remoteState.expenses) {
         if (!re) continue;
+        if (re.groupId && Number(re.groupId) !== 1) continue;
         // Skip mock expenses
         if (re.payerName === 'Priya Sharma' || re.title === 'Wifi' || re.title === 'Veggis') continue;
 
@@ -400,11 +409,16 @@ class BlockchainStateService {
       this.expenses = Array.from(expMap.values());
     }
 
-    // 3. Merge settlements
+    // 3. Merge settlements (only for Group #1)
     if (Array.isArray(remoteState.settlements)) {
       const setMap = new Map();
-      for (const s of this.settlements) setMap.set(String(s.id), s);
+      for (const s of this.settlements) {
+        if (!s.groupId || Number(s.groupId) === 1) {
+          setMap.set(String(s.id), s);
+        }
+      }
       for (const rs of remoteState.settlements) {
+        if (!rs || (rs.groupId && Number(rs.groupId) !== 1)) continue;
         if (!setMap.has(String(rs.id))) {
           setMap.set(String(rs.id), rs);
           hasRemoteAdditions = true;
@@ -418,13 +432,16 @@ class BlockchainStateService {
       this.settlements = Array.from(setMap.values());
     }
 
-    // 4. Merge audit logs
+    // 4. Merge audit logs (only for Group #1)
     if (Array.isArray(remoteState.auditLogs)) {
       const logMap = new Map();
       for (const l of this.auditLogs) {
-        logMap.set(`${l.id}_${l.timestamp}_${l.action}`, l);
+        if (!l.groupId || Number(l.groupId) === 1) {
+          logMap.set(`${l.id}_${l.timestamp}_${l.action}`, l);
+        }
       }
       for (const rl of remoteState.auditLogs) {
+        if (!rl || (rl.groupId && Number(rl.groupId) !== 1)) continue;
         const key = `${rl.id}_${rl.timestamp}_${rl.action}`;
         if (!logMap.has(key)) {
           logMap.set(key, rl);
@@ -433,6 +450,9 @@ class BlockchainStateService {
       }
       this.auditLogs = Array.from(logMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     }
+
+    this.groups = this.groups.filter(g => Number(g.id) === 1);
+    this.currentGroupId = 1;
 
     // Save merged state locally
     this.saveState(true);
@@ -540,10 +560,16 @@ class BlockchainStateService {
         this.expenses = Array.isArray(parsed.expenses) ? parsed.expenses : [];
         this.auditLogs = Array.isArray(parsed.auditLogs) ? parsed.auditLogs : [];
         this.settlements = Array.isArray(parsed.settlements) ? parsed.settlements : [];
-        this.currentGroupId = parsed.currentGroupId || 1;
+        this.currentGroupId = 1;
         this.currentBlockNumber = parsed.currentBlockNumber || 19843600;
 
-        // If no groups exist, seed the single public ledger
+        // Strictly wipe all group ledgers except the single default Public Ledger (Group #1)
+        this.groups = this.groups.filter(g => Number(g.id) === 1);
+        this.expenses = this.expenses.filter(e => !e.groupId || Number(e.groupId) === 1);
+        this.settlements = this.settlements.filter(s => !s.groupId || Number(s.groupId) === 1);
+        this.auditLogs = this.auditLogs.filter(l => !l.groupId || Number(l.groupId) === 1);
+
+        // If no public ledger exists, seed the single public ledger
         if (!this.groups || this.groups.length === 0) {
           this.groups = [
             {
@@ -561,31 +587,24 @@ class BlockchainStateService {
               members: this.myProfile && this.myProfile.address ? [{
                 address: this.myProfile.address,
                 name: this.myProfile.name,
+                email: this.myProfile.email || undefined,
                 role: 'ADMIN',
                 avatar: this.myProfile.avatar,
                 pin: this.myProfile.pin,
                 upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-                tokenBalance: this.myProfile.tokenBalance || 50000,
+                tokenBalance: this.myProfile.tokenBalance || 75000,
                 joinedAt: Date.now(),
               }] : [],
             }
           ];
         }
 
-        // Ensure all groups have isPrivate, ledgerId, password, and inviteCode
+        // Ensure Public Ledger properties
         this.groups.forEach(g => {
-          if (g.isPrivate === undefined) {
-            g.isPrivate = false;
-          }
-          if (!g.ledgerId) {
-            g.ledgerId = g.id === 1 ? 'PUB-101' : `GRP-${100 + g.id}`;
-          }
-          if (g.password === undefined) {
-            g.password = g.isPrivate ? (g.inviteCode || `PASS-${1000 + g.id * 111}`) : '';
-          }
-          if (!g.inviteCode) {
-            g.inviteCode = g.isPrivate ? (g.password || 'FS-4020') : 'PUBLIC';
-          }
+          g.isPrivate = false;
+          g.ledgerId = 'PUB-101';
+          g.password = '';
+          g.inviteCode = 'PUBLIC';
         });
 
         // Strictly sanitize Public Ledger members: only real Google users with verified emails
@@ -600,8 +619,11 @@ class BlockchainStateService {
           if (e.payerName === 'Priya Sharma' || e.title === 'Wifi' || e.title === 'Veggis') return false;
           return true;
         });
+
+        // Save sanitized wiped state to ensure only single public ledger persists
+        this.saveState(true);
       } else {
-        // No stored state at all — initialize clean single public ledger with 0 initial users
+        // No stored state at all — initialize clean single public ledger
         this.resetToDefaults();
       }
     } catch (e) {

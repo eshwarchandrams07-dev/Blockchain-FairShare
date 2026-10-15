@@ -63,6 +63,13 @@ try {
   if (fs.existsSync(DB_FILE)) {
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
     cachedLedgerState = JSON.parse(raw);
+    if (cachedLedgerState) {
+      cachedLedgerState.groups = (cachedLedgerState.groups || []).filter(g => Number(g.id) === 1);
+      cachedLedgerState.expenses = (cachedLedgerState.expenses || []).filter(e => !e.groupId || Number(e.groupId) === 1);
+      cachedLedgerState.settlements = (cachedLedgerState.settlements || []).filter(s => !s.groupId || Number(s.groupId) === 1);
+      cachedLedgerState.auditLogs = (cachedLedgerState.auditLogs || []).filter(l => !l.groupId || Number(l.groupId) === 1);
+      cachedLedgerState.currentGroupId = 1;
+    }
     console.log(`[Database] Loaded permanent ledger from disk (${cachedLedgerState?.groups?.length || 0} groups, ${cachedLedgerState?.expenses?.length || 0} expenses)`);
   }
 } catch (err) {
@@ -85,10 +92,11 @@ function mergeLedgerStates(base, update) {
   if (!base) {
     if (!update) return null;
     return {
-      groups: Array.isArray(update.groups) ? update.groups : [],
-      expenses: Array.isArray(update.expenses) ? update.expenses : [],
-      settlements: Array.isArray(update.settlements) ? update.settlements : [],
-      auditLogs: Array.isArray(update.auditLogs) ? update.auditLogs : [],
+      groups: (Array.isArray(update.groups) ? update.groups : []).filter(g => Number(g.id) === 1),
+      expenses: (Array.isArray(update.expenses) ? update.expenses : []).filter(e => !e.groupId || Number(e.groupId) === 1),
+      settlements: (Array.isArray(update.settlements) ? update.settlements : []).filter(s => !s.groupId || Number(s.groupId) === 1),
+      auditLogs: (Array.isArray(update.auditLogs) ? update.auditLogs : []).filter(l => !l.groupId || Number(l.groupId) === 1),
+      currentGroupId: 1,
     };
   }
   if (!update) return base;
@@ -96,19 +104,23 @@ function mergeLedgerStates(base, update) {
   const merged = {
     ...base,
     ...update,
-    groups: Array.isArray(update.groups) ? update.groups : (Array.isArray(base.groups) ? base.groups : []),
-    expenses: Array.isArray(update.expenses) ? update.expenses : (Array.isArray(base.expenses) ? base.expenses : []),
-    settlements: Array.isArray(update.settlements) ? update.settlements : (Array.isArray(base.settlements) ? base.settlements : []),
-    auditLogs: Array.isArray(update.auditLogs) ? update.auditLogs : (Array.isArray(base.auditLogs) ? base.auditLogs : []),
+    currentGroupId: 1,
+    groups: (Array.isArray(update.groups) ? update.groups : (Array.isArray(base.groups) ? base.groups : [])).filter(g => Number(g.id) === 1),
+    expenses: (Array.isArray(update.expenses) ? update.expenses : (Array.isArray(base.expenses) ? base.expenses : [])).filter(e => !e.groupId || Number(e.groupId) === 1),
+    settlements: (Array.isArray(update.settlements) ? update.settlements : (Array.isArray(base.settlements) ? base.settlements : [])).filter(s => !s.groupId || Number(s.groupId) === 1),
+    auditLogs: (Array.isArray(update.auditLogs) ? update.auditLogs : (Array.isArray(base.auditLogs) ? base.auditLogs : [])).filter(l => !l.groupId || Number(l.groupId) === 1),
   };
 
   // Merge groups and members by address
   if (Array.isArray(base.groups) && Array.isArray(update.groups)) {
     const groupMap = new Map();
     for (const g of base.groups) {
-      groupMap.set(g.id, { ...g, members: [...(g.members || [])] });
+      if (Number(g.id) === 1) {
+        groupMap.set(g.id, { ...g, members: [...(g.members || [])] });
+      }
     }
     for (const g of update.groups) {
+      if (Number(g.id) !== 1) continue;
       const existing = groupMap.get(g.id);
       if (!existing) {
         groupMap.set(g.id, g);
@@ -137,8 +149,11 @@ function mergeLedgerStates(base, update) {
   // Merge expenses
   if (Array.isArray(base.expenses) && Array.isArray(update.expenses)) {
     const expMap = new Map();
-    for (const e of base.expenses) expMap.set(String(e.id), e);
+    for (const e of base.expenses) {
+      if (!e.groupId || Number(e.groupId) === 1) expMap.set(String(e.id), e);
+    }
     for (const e of update.expenses) {
+      if (e.groupId && Number(e.groupId) !== 1) continue;
       const existing = expMap.get(String(e.id));
       if (!existing || (e.timestamp || 0) >= (existing.timestamp || 0)) {
         expMap.set(String(e.id), e);
@@ -150,8 +165,11 @@ function mergeLedgerStates(base, update) {
   // Merge settlements
   if (Array.isArray(base.settlements) && Array.isArray(update.settlements)) {
     const setMap = new Map();
-    for (const s of base.settlements) setMap.set(String(s.id), s);
+    for (const s of base.settlements) {
+      if (!s.groupId || Number(s.groupId) === 1) setMap.set(String(s.id), s);
+    }
     for (const s of update.settlements) {
+      if (s.groupId && Number(s.groupId) !== 1) continue;
       if (!setMap.has(String(s.id))) setMap.set(String(s.id), s);
     }
     merged.settlements = Array.from(setMap.values());
@@ -160,8 +178,11 @@ function mergeLedgerStates(base, update) {
   // Merge audit logs
   if (Array.isArray(base.auditLogs) && Array.isArray(update.auditLogs)) {
     const logMap = new Map();
-    for (const l of base.auditLogs) logMap.set(`${l.id}_${l.timestamp}_${l.action}`, l);
+    for (const l of base.auditLogs) {
+      if (!l.groupId || Number(l.groupId) === 1) logMap.set(`${l.id}_${l.timestamp}_${l.action}`, l);
+    }
     for (const l of update.auditLogs) {
+      if (l.groupId && Number(l.groupId) !== 1) continue;
       const key = `${l.id}_${l.timestamp}_${l.action}`;
       if (!logMap.has(key)) logMap.set(key, l);
     }
