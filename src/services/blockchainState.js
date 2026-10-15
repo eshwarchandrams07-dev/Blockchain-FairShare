@@ -40,53 +40,8 @@ export const SPLIT_TYPES = {
   PERCENTAGE: 2,
 };
 
-export const DEMO_PERSONAS = [
-  {
-    address: '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
-    name: 'Eshwar (Admin)',
-    avatar: '👑',
-    role: 'ADMIN',
-    pin: '1234',
-    tokenBalance: 75000,
-    upiId: 'eshwar@okhdfcbank',
-  },
-  {
-    address: '0x71C841753D3b1b6f00A9E58A437E5d4aC33eA401',
-    name: 'Priya Sharma',
-    avatar: '👩‍💼',
-    role: 'MEMBER',
-    pin: '4321',
-    tokenBalance: 65000,
-    upiId: 'priya.sharma@paytm',
-  },
-  {
-    address: '0x2546BcD3c84621e976D8185a91A922aE77ECEc30',
-    name: 'Rohan Verma',
-    avatar: '👨‍💻',
-    role: 'MEMBER',
-    pin: '7777',
-    tokenBalance: 42000,
-    upiId: 'rohanv@okaxis',
-  },
-  {
-    address: '0xbDA5747bFD65F08deb54cb465eB87D40e51B197E',
-    name: 'Ananya Iyer',
-    avatar: '👩‍🎨',
-    role: 'MEMBER',
-    pin: '9999',
-    tokenBalance: 80000,
-    upiId: 'ananya.iyer@icici',
-  },
-  {
-    address: '0xdD2FD4581271e230360230F9337D5c0430Bf44C0',
-    name: 'Kabir Mehta',
-    avatar: '👨‍🚀',
-    role: 'MEMBER',
-    pin: '5555',
-    tokenBalance: 35000,
-    upiId: 'kabir.mehta@oksbi',
-  },
-];
+// Public Ledger members are strictly genuine Google-authenticated users
+export const DEMO_PERSONAS = [];
 
 /**
  * Check if this device is the original host (first-ever install) vs a joining device
@@ -240,6 +195,59 @@ class BlockchainStateService {
     }
   }
 
+  sanitizeGoogleMembers(members) {
+    if (!Array.isArray(members)) return [];
+    const seenEmails = new Set();
+    const seenAddrs = new Set();
+    const clean = [];
+
+    for (const m of members) {
+      if (!m || !m.name) continue;
+      const name = (m.name || '').trim();
+      const email = (m.email || '').trim().toLowerCase();
+      const address = (m.address || '').trim().toLowerCase();
+
+      // Filter out demo personas and auto-generated device names
+      if (
+        name.startsWith('Phone User (') ||
+        name === 'Samsung' ||
+        name === 'Priya Sharma' ||
+        name === 'Rohan Verma' ||
+        name === 'Ananya Iyer' ||
+        name === 'Kabir Mehta'
+      ) {
+        continue;
+      }
+
+      if (name === 'Eshwar (Admin)') {
+        // Only keep if this is an authentic Google account with verified email
+        if (!email || !email.includes('@')) {
+          continue;
+        }
+      }
+
+      // Enforce valid email requirement for Google users
+      if (!email || !email.includes('@')) {
+        continue;
+      }
+
+      // Deduplicate by email and address
+      if (seenEmails.has(email) || (address && seenAddrs.has(address))) {
+        continue;
+      }
+
+      seenEmails.add(email);
+      if (address) seenAddrs.add(address);
+
+      clean.push({
+        ...m,
+        provider: 'google',
+      });
+    }
+
+    return clean;
+  }
+
   ensureProfileInPublicLedger() {
     if (!this.groups || this.groups.length === 0) return;
     const publicGroup = this.groups.find(g => Number(g.id) === 1) || this.groups[0];
@@ -249,21 +257,30 @@ class BlockchainStateService {
       publicGroup.members = [];
     }
 
-    const myAddr = (this.myProfile?.address || '').toLowerCase();
-    if (!myAddr) return;
+    // Strictly sanitize and purge any demo/non-Google users
+    publicGroup.members = this.sanitizeGoogleMembers(publicGroup.members);
 
-    const existing = publicGroup.members.find(m => m.address && m.address.toLowerCase() === myAddr);
+    const myAddr = (this.myProfile?.address || '').toLowerCase();
+    const myEmail = (this.myProfile?.email || '').toLowerCase();
+    if (!myAddr || !myEmail) return;
+
+    const existing = publicGroup.members.find(m => 
+      (m.address && m.address.toLowerCase() === myAddr) ||
+      (m.email && m.email.toLowerCase() === myEmail)
+    );
+
     if (!existing) {
       const isFirst = publicGroup.members.length === 0;
       const newMember = {
         address: this.myProfile.address,
         name: this.myProfile.name,
-        email: this.myProfile.email || null,
+        email: this.myProfile.email,
         role: isFirst ? 'ADMIN' : 'MEMBER',
-        avatar: this.myProfile.avatar,
-        pin: this.myProfile.pin,
+        avatar: this.myProfile.avatar || '👑',
+        pin: this.myProfile.pin || '1234',
         upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-        tokenBalance: this.myProfile.tokenBalance || 50000,
+        tokenBalance: this.myProfile.tokenBalance || 75000,
+        provider: 'google',
         joinedAt: Date.now(),
       };
       publicGroup.members.push(newMember);
@@ -272,6 +289,7 @@ class BlockchainStateService {
       if (this.myProfile.name && existing.name !== this.myProfile.name) existing.name = this.myProfile.name;
       if (this.myProfile.avatar && existing.avatar !== this.myProfile.avatar) existing.avatar = this.myProfile.avatar;
       if (this.myProfile.email && existing.email !== this.myProfile.email) existing.email = this.myProfile.email;
+      if (this.myProfile.address && existing.address !== this.myProfile.address) existing.address = this.myProfile.address;
     }
   }
 
@@ -340,7 +358,11 @@ class BlockchainStateService {
           }
         }
 
-        lGroup.members = Array.from(localMemberMap.values());
+        if (Number(lGroup.id) === 1) {
+          lGroup.members = this.sanitizeGoogleMembers(Array.from(localMemberMap.values()));
+        } else {
+          lGroup.members = Array.from(localMemberMap.values());
+        }
       }
     }
 
@@ -350,6 +372,10 @@ class BlockchainStateService {
       for (const e of this.expenses) expMap.set(String(e.id), e);
 
       for (const re of remoteState.expenses) {
+        if (!re) continue;
+        // Skip mock expenses
+        if (re.payerName === 'Priya Sharma' || re.title === 'Wifi' || re.title === 'Veggis') continue;
+
         const existing = expMap.get(String(re.id));
         if (!existing) {
           expMap.set(String(re.id), re);
@@ -560,6 +586,19 @@ class BlockchainStateService {
           if (!g.inviteCode) {
             g.inviteCode = g.isPrivate ? (g.password || 'FS-4020') : 'PUBLIC';
           }
+        });
+
+        // Strictly sanitize Public Ledger members: only real Google users with verified emails
+        const pubGroup = this.groups.find(g => Number(g.id) === 1);
+        if (pubGroup && Array.isArray(pubGroup.members)) {
+          pubGroup.members = this.sanitizeGoogleMembers(pubGroup.members);
+        }
+
+        // Purge mock demo expenses
+        this.expenses = this.expenses.filter(e => {
+          if (!e) return false;
+          if (e.payerName === 'Priya Sharma' || e.title === 'Wifi' || e.title === 'Veggis') return false;
+          return true;
         });
       } else {
         // No stored state at all — initialize clean single public ledger with 0 initial users
