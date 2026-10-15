@@ -3,54 +3,10 @@ import { ethers } from 'ethers';
 const AUTH_USER_KEY = 'fairshare_auth_user_v1';
 const SAVED_ACCOUNTS_KEY = 'fairshare_saved_accounts_v1';
 const GOOGLE_CLIENT_ID_KEY = 'fairshare_google_client_id';
+const DEFAULT_GOOGLE_CLIENT_ID = '35215547950-754aeo0b3arostmibiqm9478smij92pk.apps.googleusercontent.com';
 
-// Default initial Google profiles for instant 1-tap preview
-export const DEFAULT_GOOGLE_PROFILES = [
-  {
-    name: 'Eshwar Chandram',
-    email: 'eshwarchandrams@gmail.com',
-    avatar: '👑',
-    picture: null,
-    role: 'ADMIN',
-    upiId: 'eshwar@okhdfcbank',
-    pin: '1234',
-    badge: 'Founder / Admin',
-    googleSub: '108293847291028374829',
-  },
-  {
-    name: 'Priya Sharma',
-    email: 'priya.sharma@gmail.com',
-    avatar: '👩‍💼',
-    picture: null,
-    role: 'MEMBER',
-    upiId: 'priya.sharma@paytm',
-    pin: '4321',
-    badge: 'Verified Member',
-    googleSub: '109823471029384729103',
-  },
-  {
-    name: 'Rohan Verma',
-    email: 'rohan.verma@gmail.com',
-    avatar: '👨‍💻',
-    picture: null,
-    role: 'MEMBER',
-    upiId: 'rohanv@okaxis',
-    pin: '7777',
-    badge: 'Verified Member',
-    googleSub: '10748291029384729104',
-  },
-  {
-    name: 'Ananya Iyer',
-    email: 'ananya.iyer@gmail.com',
-    avatar: '👩‍🎨',
-    picture: null,
-    role: 'MEMBER',
-    upiId: 'ananya.iyer@icici',
-    pin: '9999',
-    badge: 'Verified Member',
-    googleSub: '10639201928374619285',
-  },
-];
+// Real Google Profiles are authenticated exclusively via Google Identity Services
+export const DEFAULT_GOOGLE_PROFILES = [];
 
 /**
  * Deterministically derive an Ethereum wallet from a user's Google Identity (email or sub)
@@ -104,10 +60,11 @@ class AuthService {
       return (
         localStorage.getItem(GOOGLE_CLIENT_ID_KEY) ||
         (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_CLIENT_ID) ||
+        DEFAULT_GOOGLE_CLIENT_ID ||
         ''
-      );
+      ).trim();
     } catch {
-      return '';
+      return DEFAULT_GOOGLE_CLIENT_ID || '';
     }
   }
 
@@ -128,7 +85,8 @@ class AuthService {
       const stored = localStorage.getItem(AUTH_USER_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && parsed.email && parsed.address) {
+        // Strictly require verified Google OAuth credentials
+        if (parsed && parsed.email && parsed.address && parsed.googleSub && parsed.provider === 'google') {
           return parsed;
         }
       }
@@ -137,17 +95,17 @@ class AuthService {
   }
 
   getSavedAccounts() {
-    if (typeof window === 'undefined') return [...DEFAULT_GOOGLE_PROFILES];
+    if (typeof window === 'undefined') return [];
     try {
       const stored = localStorage.getItem(SAVED_ACCOUNTS_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.filter(a => a && a.email && a.googleSub && a.provider === 'google');
         }
       }
     } catch {}
-    return [...DEFAULT_GOOGLE_PROFILES];
+    return [];
   }
 
   saveAccountToList(user) {
