@@ -21,7 +21,7 @@ export default function PrivateGroupGate({
   onCreateGroup,
   onSelectGroup
 }) {
-  const [ledgerIdInput, setLedgerIdInput] = useState(currentGroup?.ledgerId || '');
+  const [ledgerIdInput, setLedgerIdInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -31,17 +31,12 @@ export default function PrivateGroupGate({
   // Modal state for creating a new group while locked
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-
   const matchingGroup = (groups || []).find(g => {
     if (!g.ledgerId) return false;
     const gClean = g.ledgerId.trim().toUpperCase();
     const inputClean = ledgerIdInput.trim().toUpperCase();
     return gClean === inputClean || gClean.replace(/[^A-Z0-9]/g, '') === inputClean.replace(/[^A-Z0-9]/g, '');
   }) || currentGroup;
-
-  const targetLedgerId = matchingGroup?.ledgerId || currentGroup?.ledgerId || 'APT-402';
-  const targetPassword = matchingGroup?.password || matchingGroup?.inviteCode || currentGroup?.password || currentGroup?.inviteCode || 'FS-4020';
-  const targetGroupName = matchingGroup?.name || currentGroup?.name || 'Private Group Ledger';
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -51,7 +46,7 @@ export default function PrivateGroupGate({
     const cleanPass = passwordInput.trim();
 
     if (!cleanId) {
-      setErrorMsg('Please enter the Ledger ID (e.g. ' + targetLedgerId + ').');
+      setErrorMsg('Please enter the Private Ledger ID.');
       return;
     }
     if (!cleanPass) {
@@ -80,12 +75,6 @@ export default function PrivateGroupGate({
         setErrorMsg('Error: ' + (err.message || 'Unknown network error'));
       }
     }, 150);
-  };
-
-  const handleAutoFill = () => {
-    setLedgerIdInput(targetLedgerId);
-    setPasswordInput(targetPassword);
-    setErrorMsg('');
   };
 
 
@@ -226,41 +215,6 @@ export default function PrivateGroupGate({
             <ArrowRight size={16} />
           </button>
         </form>
-
-        {/* Demo Hint Banner for Fast Testing */}
-        <div 
-          style={{
-            marginTop: '16px',
-            padding: '10px 14px',
-            borderRadius: 'var(--radius-md)',
-            background: 'rgba(245, 158, 11, 0.08)',
-            border: '1px dashed rgba(245, 158, 11, 0.3)',
-            fontSize: '11px',
-            color: 'var(--color-amber)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '8px',
-            textAlign: 'left'
-          }}
-        >
-          <div>
-            <div>
-              💡 <strong>Evaluator Hint:</strong> ID: <code className="mono" style={{ fontWeight: 800 }}>{targetLedgerId}</code> • Pass: <code className="mono" style={{ fontWeight: 800 }}>{targetPassword}</code>
-            </div>
-            <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '2px' }}>
-              Created at private ledger genesis for device 2FA.
-            </div>
-          </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={handleAutoFill}
-            style={{ fontSize: '10px', height: '24px', padding: '0 8px', whiteSpace: 'nowrap' }}
-          >
-            Auto-fill Both
-          </button>
-        </div>
 
 
 

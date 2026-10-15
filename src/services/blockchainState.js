@@ -610,9 +610,22 @@ class BlockchainStateService {
     }
   }
 
+  getUnlockedStorageKey() {
+    const email = (this.myProfile?.email || '').trim().toLowerCase();
+    if (email) {
+      return `fairshare_unlocked_${email.replace(/[^a-z0-9]/g, '_')}`;
+    }
+    const addr = (this.myProfile?.address || '').trim().toLowerCase();
+    if (addr) {
+      return `fairshare_unlocked_${addr}`;
+    }
+    return 'fairshare_unlocked_default';
+  }
+
   loadUnlockedGroups() {
     try {
-      const stored = localStorage.getItem(this.unlockedGroupIdsKey);
+      const key = this.getUnlockedStorageKey();
+      const stored = localStorage.getItem(key);
       if (stored) {
         return JSON.parse(stored);
       }
@@ -623,7 +636,8 @@ class BlockchainStateService {
 
   saveUnlockedGroups() {
     try {
-      localStorage.setItem(this.unlockedGroupIdsKey, JSON.stringify(this.unlockedGroupIds));
+      const key = this.getUnlockedStorageKey();
+      localStorage.setItem(key, JSON.stringify(this.unlockedGroupIds));
     } catch {}
   }
 
@@ -640,11 +654,20 @@ class BlockchainStateService {
   joinActiveGroupAsDeviceUser() {
     const activeGroup = this.getCurrentGroup() || (this.groups && this.groups[0]);
     if (!activeGroup) return null;
+
+    // CRITICAL SECURITY FIX: Never auto-join any device/user to a PRIVATE ledger!
+    // Joining a private ledger strictly requires entering the Ledger ID and Password via joinGroup()!
+    if (activeGroup.isPrivate) {
+      return null;
+    }
+
     if (!Array.isArray(activeGroup.members)) activeGroup.members = [];
     const myAddr = (this.myProfile?.address || '').toLowerCase();
+    const myEmail = (this.myProfile?.email || '').toLowerCase();
     if (!myAddr) return null;
     const exists = activeGroup.members.some(
-      m => m && m.address && m.address.toLowerCase() === myAddr
+      m => (m && m.address && m.address.toLowerCase() === myAddr) ||
+           (myEmail && m && m.email && m.email.toLowerCase() === myEmail)
     );
     if (!exists) {
       const newMember = {
@@ -652,10 +675,11 @@ class BlockchainStateService {
         name: this.myProfile.name,
         email: this.myProfile.email || null,
         role: activeGroup.members.length === 0 ? 'ADMIN' : 'MEMBER',
-        avatar: this.myProfile.avatar,
-        pin: this.myProfile.pin,
+        avatar: this.myProfile.avatar || '👑',
+        pin: this.myProfile.pin || '1234',
         upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-        tokenBalance: this.myProfile.tokenBalance || 50000,
+        tokenBalance: this.myProfile.tokenBalance || 75000,
+        provider: 'google',
         joinedAt: Date.now(),
       };
       activeGroup.members.push(newMember);
@@ -804,6 +828,7 @@ class BlockchainStateService {
     };
     this.currentAccount = user.address;
     this.currentGroupId = 1; // Default directly to the open Public Ledger
+    this.unlockedGroupIds = this.loadUnlockedGroups(); // Reload unlocked groups scoped to THIS user
     this.ensureProfileInPublicLedger();
     this.saveState();
     this.notifyListeners();
@@ -813,6 +838,8 @@ class BlockchainStateService {
     authService.logout();
     this.myProfile = getDeviceProfile();
     this.currentAccount = this.myProfile.address;
+    this.currentGroupId = 1; // Reset active ledger to Public Ledger
+    this.unlockedGroupIds = [1]; // Reset unlocked groups to only Public Ledger
     this.notifyListeners();
   }
 
@@ -1110,16 +1137,18 @@ class BlockchainStateService {
     // Public groups are always visible to everyone
     if (!grp.isPrivate) return true;
 
-    // Check if this device is an existing member of this private ledger
+    // A user has access to a private ledger ONLY if they are an existing member or the creator
     const myAddress = (this.myProfile?.address || this.currentAccount || '').toLowerCase();
-    const isMember = (grp.members || []).some(
-      m => m.address && m.address.toLowerCase() === myAddress
+    const myEmail = (this.myProfile?.email || '').toLowerCase();
+    if (!myAddress && !myEmail) return false;
+
+    const isCreator = Boolean(grp.creator && grp.creator.toLowerCase() === myAddress);
+    const isMember = (grp.members || []).some(m => 
+      (m && m.address && m.address.toLowerCase() === myAddress) ||
+      (myEmail && m && m.email && m.email.toLowerCase() === myEmail)
     );
 
-    // Check if this device has unlocked this group
-    const isUnlocked = this.isGroupUnlocked(grp.id);
-
-    return isMember || isUnlocked;
+    return isMember || isCreator;
   }
 
   getGroups() {
@@ -1130,7 +1159,7 @@ class BlockchainStateService {
   getCurrentGroup() {
     let grp = this.groups.find(g => String(g.id) === String(this.currentGroupId) || (!isNaN(Number(g.id)) && !isNaN(Number(this.currentGroupId)) && Number(g.id) === Number(this.currentGroupId)));
     
-    // If the group is private and the user is NOT joined or unlocked, protect it by falling back to the public ledger
+    // If the group is private and the user is NOT joined, protect it by falling back to the public ledger
     if (grp && grp.isPrivate && !this.isUserJoinedToGroup(grp)) {
       grp = this.groups.find(g => !g.isPrivate) || this.groups[0];
       if (grp) {
@@ -1162,7 +1191,10 @@ class BlockchainStateService {
     }
 
     this.currentGroupId = grp.id;
-    this.ensureProfileInActiveGroup();
+    // Only join active group if it is PUBLIC; private groups require entering credentials via joinGroup()
+    if (!grp.isPrivate) {
+      this.ensureProfileInActiveGroup();
+    }
     this.saveState();
   }
 
@@ -1174,6 +1206,11 @@ class BlockchainStateService {
     // Public ledgers are always open to view by anyone
     if (!grp.isPrivate) {
       return true;
+    }
+
+    // A private ledger is ONLY unlocked if the user is a joined member/creator AND has unlocked it in this session
+    if (!this.isUserJoinedToGroup(grp)) {
+      return false;
     }
 
     const gIdStr = String(grp.id);
@@ -1352,11 +1389,11 @@ class BlockchainStateService {
       return { success: true, group: grp, isPublic: true };
     }
 
-    // Check if group is already unlocked for this user/device
+    // Check if group is already unlocked and this user is already a verified member
     const alreadyUnlocked = this.isGroupUnlocked(targetGroupId);
+    const alreadyJoined = this.isUserJoinedToGroup(grp);
 
-    if (alreadyUnlocked) {
-      this.ensureMemberInGroup(grp);
+    if (alreadyUnlocked && alreadyJoined) {
       this.currentGroupId = targetGroupId;
       this.saveState();
       return { success: true, group: grp };
