@@ -138,6 +138,26 @@ export default function ReceiptVerifier({ expenses, currentGroup }) {
               </div>
             </div>
 
+            {/* File Metadata Card */}
+            {file && (
+              <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', marginTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileText size={16} style={{ color: 'var(--color-primary)' }} />
+                  <div>
+                    <strong style={{ color: 'var(--text-main)' }}>{file.name}</strong>
+                    <div style={{ color: 'var(--text-dim)', fontSize: '11px' }}>
+                      Size: {file.size ? `${(file.size / 1024).toFixed(1)} KB` : 'N/A'} • {file.type || 'Document'}
+                    </div>
+                  </div>
+                </div>
+                {computedHash && (
+                  <span className="badge badge-neutral mono" style={{ fontSize: '10px' }}>
+                    SHA-256 Calculated
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Manual Hash Lookup option */}
             <form onSubmit={handleManualVerify} style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
               <input
@@ -173,14 +193,30 @@ export default function ReceiptVerifier({ expenses, currentGroup }) {
                       The file's SHA-256 hash perfectly matches the ledger fingerprint anchored to the blockchain. No alteration or tampering has occurred since submission.
                     </p>
 
-                    <div style={{ background: 'var(--bg-canvas)', padding: '12px', borderRadius: 'var(--radius-sm)', fontSize: '12px' }}>
+                    <div style={{ background: 'var(--bg-canvas)', padding: '12px', borderRadius: 'var(--radius-sm)', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <div><strong>Expense Title:</strong> {matchResult.expense.title}</div>
                       <div><strong>Expense ID:</strong> #{matchResult.expense.id} (Group #{matchResult.expense.groupId})</div>
                       <div><strong>Claimed Amount:</strong> {formatCents(matchResult.expense.totalAmount)}</div>
-                      <div><strong>Payer:</strong> {matchResult.expense.payerName}</div>
-                      <div className="mono" style={{ color: 'var(--color-cyan)', marginTop: '4px', wordBreak: 'break-all' }}>
-                        <strong>On-Chain Hash:</strong> {matchResult.expense.receiptHash}
+                      <div><strong>Payer:</strong> {matchResult.expense.payerName} ({shortenAddress(matchResult.expense.payer)})</div>
+
+                      <div style={{ marginTop: '4px', paddingTop: '6px', borderTop: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>
+                          Document Hash (Local SHA-256):
+                        </div>
+                        <div className="mono" style={{ color: 'var(--color-emerald-light)', wordBreak: 'break-all', fontSize: '11px' }}>
+                          {computedHash}
+                        </div>
                       </div>
+
+                      <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>
+                          On-Chain Hash (Smart Contract):
+                        </div>
+                        <div className="mono" style={{ color: 'var(--color-cyan)', wordBreak: 'break-all', fontSize: '11px' }}>
+                          {matchResult.expense.receiptHash}
+                        </div>
+                      </div>
+
                       <div className="mono" style={{ color: 'var(--text-dim)', wordBreak: 'break-all', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
                         <span><strong>IPFS CID:</strong> {matchResult.expense.ipfsCid}</span>
                         {matchResult.expense.ipfsCid && (
@@ -210,7 +246,10 @@ export default function ReceiptVerifier({ expenses, currentGroup }) {
 
                     <div style={{ background: 'var(--bg-canvas)', padding: '12px', borderRadius: 'var(--radius-sm)', fontSize: '12px' }}>
                       <div className="mono" style={{ color: 'var(--color-rose)', wordBreak: 'break-all', fontWeight: 600 }}>
-                        <strong>Computed Hash:</strong> {computedHash}
+                        <strong>Computed Document Digest:</strong> {computedHash}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                        Cryptographic Avalanche Effect: Even altering 1 character or editing an amount in Photoshop generates a completely different hash digest, immediately flagging tampering.
                       </div>
                     </div>
                   </div>

@@ -7,8 +7,10 @@ import {
   FileCheck2, 
   Edit3, 
   Search, 
-  ShieldCheck,
-  Fingerprint
+  ShieldCheck, 
+  Fingerprint,
+  Download,
+  RotateCcw
 } from 'lucide-react';
 import { formatCents, shortenAddress } from '../utils/cryptoUtils';
 import { STATUS_LABELS, EXPENSE_STATUS } from '../services/blockchainState';
@@ -25,6 +27,8 @@ export default function ExpenseList({
   onOpenSignModal,
 }) {
   const [filter, setFilter] = useState('ALL');
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState('NEWEST');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedBlocks, setExpandedBlocks] = useState({}); // expenseId => boolean
 
@@ -34,6 +38,17 @@ export default function ExpenseList({
 
   // Filter expenses for current group
   const groupExpenses = expenses.filter(e => e.groupId === currentGroup.id);
+
+  // Available categories in this group
+  const availableCategories = Array.from(new Set(groupExpenses.map(e => e.category).filter(Boolean)));
+
+  // Calculate group metrics
+  const approvedExpenses = groupExpenses.filter(e => e.status === EXPENSE_STATUS.APPROVED);
+  const totalApprovedAmount = approvedExpenses.reduce((sum, e) => sum + (e.totalAmount || 0), 0);
+  const myTotalShare = approvedExpenses.reduce((sum, e) => {
+    const s = (e.shares || []).find(sh => sh?.participant && currentAccount && sh.participant.toLowerCase() === currentAccount.toLowerCase());
+    return sum + (s ? s.amount : 0);
+  }, 0);
 
   // Apply status filter
   const filteredByStatus = groupExpenses.filter(e => {
@@ -45,15 +60,30 @@ export default function ExpenseList({
     return true;
   });
 
+  // Apply category filter
+  const filteredByCategory = filteredByStatus.filter(e => {
+    if (categoryFilter === 'ALL') return true;
+    return e.category === categoryFilter;
+  });
+
   // Apply search query
-  const displayedExpenses = filteredByStatus.filter(e => {
+  const filteredBySearch = filteredByCategory.filter(e => {
     const q = searchQuery.toLowerCase();
     return (
       e.title.toLowerCase().includes(q) ||
       e.payerName.toLowerCase().includes(q) ||
-      e.category.toLowerCase().includes(q) ||
+      (e.category && e.category.toLowerCase().includes(q)) ||
       (e.notes && e.notes.toLowerCase().includes(q))
     );
+  });
+
+  // Apply sorting
+  const displayedExpenses = [...filteredBySearch].sort((a, b) => {
+    if (sortBy === 'NEWEST') return (b.createdAt || 0) - (a.createdAt || 0);
+    if (sortBy === 'OLDEST') return (a.createdAt || 0) - (b.createdAt || 0);
+    if (sortBy === 'AMOUNT_HIGH') return (b.totalAmount || 0) - (a.totalAmount || 0);
+    if (sortBy === 'AMOUNT_LOW') return (a.totalAmount || 0) - (b.totalAmount || 0);
+    return 0;
   });
 
   // Counts for pills
@@ -63,10 +93,97 @@ export default function ExpenseList({
   const currentMember = (currentGroup?.members || []).find(m => m && m.address && currentAccount && m.address.toLowerCase() === currentAccount.toLowerCase());
   const isAdmin = currentMember?.role === 'ADMIN';
 
+  const hasActiveFilters = filter !== 'ALL' || categoryFilter !== 'ALL' || searchQuery.trim() !== '' || sortBy !== 'NEWEST';
+
+  const handleResetFilters = () => {
+    setFilter('ALL');
+    setCategoryFilter('ALL');
+    setSearchQuery('');
+    setSortBy('NEWEST');
+  };
+
+  const handleExportCSV = () => {
+    if (groupExpenses.length === 0) return;
+    const headers = ['Expense ID', 'Title', 'Category', 'Payer Name', 'Payer Address', 'Total (INR)', 'Status', 'Date', 'Receipt Hash', 'IPFS CID'];
+    const rows = groupExpenses.map(e => [
+      e.id,
+      `"${(e.title || '').replace(/"/g, '""')}"`,
+      `"${(e.category || '').replace(/"/g, '""')}"`,
+      `"${(e.payerName || '').replace(/"/g, '""')}"`,
+      e.payer || '',
+      ((e.totalAmount || 0) / 100).toFixed(2),
+      STATUS_LABELS[e.status] || 'Unknown',
+      new Date(e.createdAt).toISOString(),
+      e.receiptHash || '',
+      e.ipfsCid || ''
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fairshare_expenses_ledger_${currentGroup?.id || 1}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div>
+      {/* Group Spending Summary Bar */}
+      <div 
+        className="glass-panel" 
+        style={{ 
+          padding: '16px 20px', 
+          marginBottom: '18px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          flexWrap: 'wrap', 
+          gap: '14px',
+          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.9) 100%)'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>Total Group Spending</div>
+            <div className="mono" style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', marginTop: '2px' }}>
+              {formatCents(totalApprovedAmount)}
+            </div>
+          </div>
+          <div style={{ width: '1px', height: '28px', background: 'var(--border-subtle)' }} />
+          <div>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>Your Allocated Share</div>
+            <div className="mono" style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-primary)', marginTop: '2px' }}>
+              {formatCents(myTotalShare)}
+            </div>
+          </div>
+          <div style={{ width: '1px', height: '28px', background: 'var(--border-subtle)' }} />
+          <div>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>Total Records</div>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)', marginTop: '4px' }}>
+              {groupExpenses.length} entries ({approvedExpenses.length} approved)
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {groupExpenses.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleExportCSV}
+              title="Download formatted CSV spreadsheet of all group expenses"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Download size={14} />
+              <span>Export CSV</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Filter and Search Bar */}
-      <div className="expenses-filter-bar">
+      <div className="expenses-filter-bar" style={{ gap: '10px', flexWrap: 'wrap' }}>
         <div className="filter-pills">
           <button 
             className={`filter-pill ${filter === 'ALL' ? 'active' : ''}`}
@@ -100,16 +217,66 @@ export default function ExpenseList({
           </button>
         </div>
 
-        <div style={{ position: 'relative', minWidth: '240px' }}>
-          <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-dim)' }} />
-          <input
-            type="text"
-            className="form-input"
-            style={{ paddingLeft: '36px', paddingRight: '12px', fontSize: '13px' }}
-            placeholder="Search expenses, tags, payers..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
+        {/* Right side controls: Category filter, Sort, Search, and Clear */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {/* Category Filter */}
+          {availableCategories.length > 0 && (
+            <div style={{ position: 'relative' }}>
+              <select
+                className="form-input"
+                style={{ padding: '6px 10px', fontSize: '12px', height: '36px', minWidth: '130px', fontWeight: 600 }}
+                value={categoryFilter}
+                onChange={e => setCategoryFilter(e.target.value)}
+              >
+                <option value="ALL">All Categories</option>
+                {availableCategories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Sort Control */}
+          <div style={{ position: 'relative' }}>
+            <select
+              className="form-input"
+              style={{ padding: '6px 10px', fontSize: '12px', height: '36px', minWidth: '130px', fontWeight: 600 }}
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+            >
+              <option value="NEWEST">⚡ Newest First</option>
+              <option value="OLDEST">⏳ Oldest First</option>
+              <option value="AMOUNT_HIGH">💰 Highest Amount</option>
+              <option value="AMOUNT_LOW">🪙 Lowest Amount</option>
+            </select>
+          </div>
+
+          {/* Search Box */}
+          <div style={{ position: 'relative', minWidth: '200px' }}>
+            <Search size={15} style={{ position: 'absolute', left: '10px', top: '11px', color: 'var(--text-dim)' }} />
+            <input
+              type="text"
+              className="form-input"
+              style={{ paddingLeft: '32px', paddingRight: '12px', fontSize: '12px', height: '36px' }}
+              placeholder="Search expenses, tags..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          {/* Clear Filters button */}
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleResetFilters}
+              title="Reset all active filters and sort"
+              style={{ height: '36px', padding: '0 10px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}
+            >
+              <RotateCcw size={12} />
+              <span>Reset</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -118,9 +285,20 @@ export default function ExpenseList({
         <div className="glass-panel" style={{ padding: '48px', textAlign: 'center' }}>
           <FileText size={40} style={{ color: 'var(--text-dim)', margin: '0 auto 12px' }} />
           <h4 style={{ fontSize: '18px', marginBottom: '6px' }}>No expenses found</h4>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-            {searchQuery ? 'Try adjusting your search criteria' : 'Submit a new expense to get started with transparent splitting.'}
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: hasActiveFilters ? '14px' : '0' }}>
+            {hasActiveFilters ? 'No expenses match your current search or filter criteria.' : 'Submit a new expense to get started with transparent splitting.'}
           </p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleResetFilters}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <RotateCcw size={13} />
+              <span>Reset All Filters</span>
+            </button>
+          )}
         </div>
       ) : (
         displayedExpenses.map(exp => {

@@ -14,7 +14,9 @@ import {
   X,
   Edit3,
   MessageSquare,
-  Share2
+  Share2,
+  FileText,
+  Printer
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -46,6 +48,9 @@ export default function SettlementHub({
   const [offChainRefInput, setOffChainRefInput] = useState('');
   const [activeOffChainModal, setActiveOffChainModal] = useState(null); // transfer object
   const [activeUpiModal, setActiveUpiModal] = useState(null);
+  const [customAmountInput, setCustomAmountInput] = useState('');
+  const [voucherModalData, setVoucherModalData] = useState(null);
+  const [copiedVoucher, setCopiedVoucher] = useState(false);
   const [utrInput, setUtrInput] = useState('');
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
@@ -92,6 +97,7 @@ export default function SettlementHub({
     setActiveUpiModal(transfer);
     const recipientMember = currentGroup?.members?.find(m => m && m.address && transfer?.to && m.address.toLowerCase() === transfer.to.toLowerCase());
     setCustomUpiInput(recipientMember?.upiId || '');
+    setCustomAmountInput((transfer.amount / 100).toFixed(2));
     setIsEditingUpi(false);
     setUtrInput('');
     setCopiedUpi(false);
@@ -116,12 +122,18 @@ export default function SettlementHub({
     const recipientUpi = (customUpiInput || recipientMember?.upiId || `${(activeUpiModal.toName || 'user').toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`).trim();
     const finalUtr = utrInput.trim() || `UTR-${Date.now().toString().slice(-8)}`;
 
+    const parsedRupees = parseFloat(customAmountInput);
+    const maxPaise = activeUpiModal.amount;
+    const settlePaise = (!isNaN(parsedRupees) && parsedRupees > 0)
+      ? Math.min(maxPaise, Math.round(parsedRupees * 100))
+      : maxPaise;
+
     try {
       if (onRecordUpiSettlement) {
         onRecordUpiSettlement(
           activeUpiModal.to,
           activeUpiModal.toName,
-          activeUpiModal.amount,
+          settlePaise,
           finalUtr,
           recipientUpi
         );
@@ -389,10 +401,45 @@ export default function SettlementHub({
                         </button>
                       </div>
                     ) : (
-                      <div style={{ fontSize: '12px', color: 'var(--text-dim)', textAlign: 'center', padding: '6px' }}>
-                        {isUserCreditor 
-                          ? `Awaiting payment of ${formatCents(tr.amount)} from ${tr.fromName}` 
-                          : `Participant settlement between ${tr.fromName} and ${tr.toName}`}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '4px 0' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text-dim)', textAlign: 'center' }}>
+                          {isUserCreditor 
+                            ? `You are owed ${formatCents(tr.amount)} by ${tr.fromName}` 
+                            : `Participant settlement: ${tr.fromName} owes ${tr.toName} ${formatCents(tr.amount)}`}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => handleOpenUpi(tr)}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            title="Open UPI QR code with receiving details"
+                          >
+                            <QrCode size={14} style={{ color: 'var(--color-primary)' }} />
+                            <span>{isUserCreditor ? 'Show My Receiving QR' : 'Inspect Settlement QR'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => {
+                              const recipientMember = currentGroup?.members?.find(m => m && m.address && tr?.to && m.address.toLowerCase() === tr.to.toLowerCase());
+                              const upi = (recipientMember?.upiId || `${(tr.toName || 'user').toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`).trim();
+                              const uri = generateUpiUri({
+                                upiId: upi,
+                                payeeName: tr.toName,
+                                amountInRupees: (tr.amount / 100).toFixed(2),
+                                note: `FairShare - ${currentGroup.name}`
+                              });
+                              navigator.clipboard.writeText(uri);
+                              alert(`Payment intent link for ₹${(tr.amount / 100).toFixed(2)} copied to clipboard!`);
+                            }}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                            title="Copy shareable payment intent link"
+                          >
+                            <Share2 size={14} />
+                            <span>Share Payment Link</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -466,6 +513,17 @@ export default function SettlementHub({
                         </>
                       )}
 
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setVoucherModalData(st)}
+                        title="View certified cryptographic settlement voucher"
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <FileText size={12} />
+                        <span>Voucher</span>
+                      </button>
+
                       {st.txHash && (
                         <span className="mono" style={{ fontSize: '11px', color: 'var(--text-main)', background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-subtle)', padding: '4px 8px', borderRadius: '4px' }}>
                           Tx: {shortenAddress(st.txHash)}
@@ -531,7 +589,8 @@ export default function SettlementHub({
         const rawRecipientUpi = (customUpiInput || recipientMember?.upiId || `${(activeUpiModal.toName || 'user').toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`).trim();
         const isDemoUpi = isPlaceholderUpi(rawRecipientUpi);
         const isUpiValid = isValidUpiId(rawRecipientUpi);
-        const amountInRupees = (activeUpiModal.amount / 100).toFixed(2);
+        const maxRupees = (activeUpiModal.amount / 100).toFixed(2);
+        const amountInRupees = customAmountInput !== '' ? customAmountInput : maxRupees;
         const upiUri = generateUpiUri({
           upiId: rawRecipientUpi,
           payeeName: activeUpiModal.toName,
@@ -598,10 +657,56 @@ export default function SettlementHub({
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>Amount Due</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>Total Due</div>
                     <div className="mono" style={{ fontSize: '22px', fontWeight: 800, color: 'var(--color-emerald-light)' }}>
                       {formatCents(activeUpiModal.amount)}
                     </div>
+                  </div>
+                </div>
+
+                {/* Settle Amount Field (Full or Partial) */}
+                <div style={{ background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-main)', textTransform: 'uppercase' }}>
+                      Payment Amount (₹)
+                    </label>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {amountInRupees === maxRupees ? 'Full settlement' : `Partial payment (₹${amountInRupees} of ₹${maxRupees})`}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <span style={{ position: 'absolute', left: '10px', top: '9px', fontWeight: 700, color: 'var(--text-dim)' }}>₹</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="1"
+                        max={maxRupees}
+                        className="form-input mono"
+                        style={{ paddingLeft: '24px', fontSize: '14px', fontWeight: 700, height: '36px' }}
+                        value={customAmountInput}
+                        onChange={e => setCustomAmountInput(e.target.value)}
+                        placeholder={maxRupees}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: '11px', height: '36px', whiteSpace: 'nowrap' }}
+                      onClick={() => setCustomAmountInput(maxRupees)}
+                    >
+                      Full Amount
+                    </button>
+                    {activeUpiModal.amount > 200 && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: '11px', height: '36px', whiteSpace: 'nowrap' }}
+                        onClick={() => setCustomAmountInput((activeUpiModal.amount / 200).toFixed(2))}
+                      >
+                        50%
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -829,6 +934,111 @@ export default function SettlementHub({
           </div>
         );
       })()}
+
+      {/* Official Settlement Receipt Voucher Modal */}
+      {voucherModalData && (
+        <div className="modal-backdrop" onClick={() => setVoucherModalData(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShieldCheck size={20} style={{ color: 'var(--color-emerald-light)' }} />
+                <h3 style={{ fontSize: '18px', fontWeight: 800 }}>Certified Settlement Voucher</h3>
+              </div>
+              <button className="close-btn" onClick={() => setVoucherModalData(null)} aria-label="Close modal">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Voucher Body (Printable Receipt Style) */}
+            <div style={{ background: '#ffffff', border: '2px dashed var(--border-medium)', borderRadius: 'var(--radius-md)', padding: '20px', marginBottom: '16px' }}>
+              <div style={{ textAlign: 'center', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '12px', marginBottom: '14px' }}>
+                <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-dim)', fontWeight: 700 }}>
+                  Blockchain Proof of Debt Discharge
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 900, color: '#166534', margin: '4px 0' }}>
+                  {formatCents(voucherModalData.amount)}
+                </div>
+                <span className="badge badge-approved" style={{ fontSize: '11px' }}>
+                  Status: {voucherModalData.status || 'CONFIRMED'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-dim)' }}>Voucher / Tx ID:</span>
+                  <span className="mono" style={{ fontWeight: 700 }}>#{voucherModalData.id}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-dim)' }}>Payer (Debtor):</span>
+                  <span style={{ fontWeight: 700 }}>{voucherModalData.fromName} ({shortenAddress(voucherModalData.from)})</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-dim)' }}>Recipient (Creditor):</span>
+                  <span style={{ fontWeight: 700 }}>{voucherModalData.toName} ({shortenAddress(voucherModalData.to)})</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-dim)' }}>Payment Method:</span>
+                  <span style={{ fontWeight: 700 }}>
+                    {voucherModalData.settlementType === 'UPI_DIRECT' ? 'Direct UPI (Anchored)' : voucherModalData.settlementType === 'CRYPTO_DIRECT' ? 'Smart Contract Token' : 'Recorded Off-Chain'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-dim)' }}>Bank UTR / Reference:</span>
+                  <span className="mono" style={{ fontWeight: 700 }}>{voucherModalData.utrNumber || voucherModalData.paymentRef}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-dim)' }}>Timestamp:</span>
+                  <span>{new Date(voucherModalData.timestamp).toLocaleString()}</span>
+                </div>
+                {voucherModalData.txHash && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span style={{ color: 'var(--text-dim)', fontSize: '11px' }}>On-Chain Transaction Digest:</span>
+                    <span className="mono" style={{ fontSize: '10px', wordBreak: 'break-all', background: 'var(--bg-canvas)', padding: '6px', borderRadius: '4px' }}>
+                      {voucherModalData.txHash}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  const summary = `FairShare Settlement Voucher #${voucherModalData.id}\nAmount: ${formatCents(voucherModalData.amount)}\nPayer: ${voucherModalData.fromName}\nRecipient: ${voucherModalData.toName}\nRef: ${voucherModalData.utrNumber || voucherModalData.paymentRef}\nTx: ${voucherModalData.txHash || 'N/A'}`;
+                  navigator.clipboard.writeText(summary);
+                  setCopiedVoucher(true);
+                  setTimeout(() => setCopiedVoucher(false), 2000);
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                {copiedVoucher ? <Check size={14} style={{ color: 'var(--color-emerald)' }} /> : <Copy size={14} />}
+                <span>{copiedVoucher ? 'Voucher Copied!' : 'Copy Summary'}</span>
+              </button>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => window.print()}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Printer size={14} />
+                  <span>Print</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setVoucherModalData(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

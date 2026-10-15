@@ -22,12 +22,9 @@ export default function ConnectDevicesModal({
   onClose,
   groupId = 1,
   groupName = 'Ledger',
-  inviteCode = 'FS-4020',
   currentGroup,
   activePersona,
 }) {
-  if (!isOpen) return null;
-
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [copiedPass, setCopiedPass] = useState(false);

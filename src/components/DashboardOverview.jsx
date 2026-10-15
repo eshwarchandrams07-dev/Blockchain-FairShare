@@ -13,7 +13,9 @@ import {
   Globe,
   Lock,
   Check,
-  Share2
+  Share2,
+  Fingerprint,
+  Layers
 } from 'lucide-react';
 import { formatMaskedCents, shortenAddress } from '../utils/cryptoUtils';
 
@@ -42,6 +44,29 @@ export default function DashboardOverview({
   const pendingApprovalsCount = (expenses || []).filter(e => e && Number(e.groupId) === Number(currentGroup?.id) && Number(e.status) === 0).length;
   const activeDisputesCount = (expenses || []).filter(e => e && Number(e.groupId) === Number(currentGroup?.id) && Number(e.status) === 3).length;
 
+  // Consensus signature count for active account
+  const needsMySignatureCount = (expenses || []).filter(e => {
+    if (Number(e.groupId) !== Number(currentGroup?.id) || Number(e.status) !== 0) return false;
+    const myVote = (e.votes || []).find(v => (v?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase());
+    return myVote && myVote.status === 'PENDING';
+  }).length;
+
+  // Category spending breakdown across approved expenses
+  const categoryTotals = {};
+  approvedExpenses.forEach(e => {
+    const cat = e.category || 'General';
+    categoryTotals[cat] = (categoryTotals[cat] || 0) + (e.totalAmount || 0);
+  });
+  const categoryBreakdown = Object.entries(categoryTotals).map(([name, amount]) => ({
+    name,
+    amount,
+    pct: totalVolume > 0 ? Math.round((amount / totalVolume) * 100) : 0
+  })).sort((a, b) => b.amount - a.amount);
+
+  const categoryColors = [
+    '#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316'
+  ];
+
   // Check sum of balances equals 0
   const totalBalanceSum = (groupBalances || []).reduce((sum, b) => sum + (b?.netBalance || 0), 0);
   const isIntegritySound = Math.abs(totalBalanceSum) <= 1; // within 1 cent rounding
@@ -58,6 +83,39 @@ export default function DashboardOverview({
 
   return (
     <div>
+      {/* Actionable Consensus Signature Alert Banner */}
+      {needsMySignatureCount > 0 && (
+        <div 
+          style={{ 
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(6, 182, 212, 0.12) 100%)', 
+            border: '1px solid rgba(99, 102, 241, 0.35)', 
+            borderRadius: 'var(--radius-md)', 
+            padding: '12px 18px', 
+            marginBottom: '16px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', 
+            flexWrap: 'wrap', 
+            gap: '12px',
+            boxShadow: 'var(--shadow-subtle)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Fingerprint size={20} style={{ color: 'var(--color-primary)' }} />
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)' }}>
+              Action Required: You have <strong>{needsMySignatureCount} expense{needsMySignatureCount > 1 ? 's' : ''}</strong> awaiting your cryptographic PIN consensus signature.
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => onSwitchTab('consensus')}
+            style={{ fontSize: '12px', padding: '6px 14px' }}
+          >
+            Review & Sign in Consensus Hub →
+          </button>
+        </div>
+      )}
       {/* Top Welcome & Distinct Ledger Identity Banner */}
       <div 
         className="glass-panel" 
@@ -296,6 +354,60 @@ export default function DashboardOverview({
           <div className="kpi-subtext">Transactions flagged for arbitration</div>
         </div>
       </div>
+
+      {/* Category Spending Breakdown Bar Card */}
+      {categoryBreakdown.length > 0 && (
+        <div className="glass-panel" style={{ padding: '20px 24px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Layers size={18} style={{ color: 'var(--color-primary)' }} />
+              <h4 style={{ fontSize: '15px', fontWeight: 800, margin: 0 }}>Category Spending Distribution</h4>
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+              Based on {approvedExpenses.length} approved expenses
+            </div>
+          </div>
+
+          {/* Segmented multi-color progress bar */}
+          <div style={{ height: '10px', background: 'var(--bg-canvas)', borderRadius: '6px', overflow: 'hidden', display: 'flex', marginBottom: '14px' }}>
+            {categoryBreakdown.map((cat, idx) => (
+              <div
+                key={cat.name}
+                style={{
+                  height: '100%',
+                  width: `${cat.pct}%`,
+                  background: categoryColors[idx % categoryColors.length]
+                }}
+                title={`${cat.name}: ${formatCents(cat.amount)} (${cat.pct}%)`}
+              />
+            ))}
+          </div>
+
+          {/* Category Chips with Amount & Percentage */}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {categoryBreakdown.map((cat, idx) => (
+              <div
+                key={cat.name}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'var(--bg-surface-elevated)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '100px',
+                  padding: '4px 10px',
+                  fontSize: '12px'
+                }}
+              >
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: categoryColors[idx % categoryColors.length] }} />
+                <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{cat.name}:</span>
+                <span className="mono" style={{ color: 'var(--text-muted)' }}>{formatCents(cat.amount)}</span>
+                <span style={{ fontSize: '10px', color: 'var(--text-dim)', fontWeight: 700 }}>({cat.pct}%)</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Member Balances & Cryptographic Integrity Card */}
       <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>

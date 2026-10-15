@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { 
   Fingerprint, 
   ShieldCheck, 
-  Lock
+  Lock,
+  Search,
+  RotateCcw
 } from 'lucide-react';
 import ConsensusBlock from './ConsensusBlock';
 
@@ -13,6 +15,7 @@ export default function ConsensusHub({
   onOpenSignModal,
 }) {
   const [filter, setFilter] = useState('ALL'); // ALL, NEED_MY_SIGNATURE, SEALED, CONTESTED
+  const [searchQuery, setSearchQuery] = useState('');
 
   const groupExpenses = expenses.filter(e => e.groupId === currentGroup.id);
 
@@ -36,17 +39,39 @@ export default function ConsensusHub({
     return myVote && myVote.status === 'PENDING';
   });
 
+  const sealedCount = groupExpenses.filter(e => e.status === 1).length;
+  const contestedCount = groupExpenses.filter(e => e.status === 2 || e.status === 3).length;
+
   const filteredExpenses = groupExpenses.filter(e => {
-    if (filter === 'ALL') return true;
+    let matchesStatus = true;
     if (filter === 'NEED_MY_SIGNATURE') {
       const votes = getExpenseVotes(e);
       const myVote = votes.find(v => (v?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase());
-      return e.status === 0 && myVote && myVote.status === 'PENDING';
+      matchesStatus = e.status === 0 && myVote && myVote.status === 'PENDING';
+    } else if (filter === 'SEALED') {
+      matchesStatus = e.status === 1;
+    } else if (filter === 'CONTESTED') {
+      matchesStatus = e.status === 2 || e.status === 3;
     }
-    if (filter === 'SEALED') return e.status === 1;
-    if (filter === 'CONTESTED') return e.status === 2 || e.status === 3;
-    return true;
+
+    if (!matchesStatus) return false;
+
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      e.title.toLowerCase().includes(q) ||
+      e.payerName.toLowerCase().includes(q) ||
+      String(e.id).includes(q) ||
+      (e.notes && e.notes.toLowerCase().includes(q))
+    );
   });
+
+  const hasActiveFilters = filter !== 'ALL' || searchQuery.trim() !== '';
+
+  const handleResetFilters = () => {
+    setFilter('ALL');
+    setSearchQuery('');
+  };
 
   return (
     <div>
@@ -78,8 +103,8 @@ export default function ConsensusHub({
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="expenses-filter-bar" style={{ marginBottom: '20px' }}>
+      {/* Filter Tabs & Search */}
+      <div className="expenses-filter-bar" style={{ marginBottom: '20px', gap: '10px', flexWrap: 'wrap' }}>
         <div className="filter-pills">
           <button 
             className={`filter-pill ${filter === 'ALL' ? 'active' : ''}`}
@@ -97,21 +122,61 @@ export default function ConsensusHub({
             className={`filter-pill ${filter === 'SEALED' ? 'active' : ''}`}
             onClick={() => setFilter('SEALED')}
           >
-            Sealed & Confirmed
+            Sealed & Confirmed ({sealedCount})
           </button>
           <button 
             className={`filter-pill ${filter === 'CONTESTED' ? 'active' : ''}`}
             onClick={() => setFilter('CONTESTED')}
           >
-            Contested / Rejected
+            Contested / Rejected {contestedCount > 0 && `(${contestedCount})`}
           </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ position: 'relative', minWidth: '220px' }}>
+            <Search size={15} style={{ position: 'absolute', left: '10px', top: '11px', color: 'var(--text-dim)' }} />
+            <input
+              type="text"
+              className="form-input"
+              style={{ paddingLeft: '32px', paddingRight: '12px', fontSize: '12px', height: '36px' }}
+              placeholder="Search by title, payer, ID..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleResetFilters}
+              style={{ height: '36px', padding: '0 10px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}
+              title="Reset search and filters"
+            >
+              <RotateCcw size={12} />
+              <span>Reset</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* Blocks List */}
       {filteredExpenses.length === 0 ? (
         <div className="glass-panel" style={{ padding: '40px', textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-muted)' }}>No consensus blocks match this filter.</p>
+          <p style={{ color: 'var(--text-muted)', marginBottom: hasActiveFilters ? '12px' : '0' }}>
+            {hasActiveFilters ? 'No consensus blocks match your search or filter.' : 'No consensus blocks found in this ledger.'}
+          </p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleResetFilters}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <RotateCcw size={13} />
+              <span>Reset Filters</span>
+            </button>
+          )}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

@@ -17,8 +17,7 @@ import {
   HardDrive, 
   RotateCcw, 
   Sparkles,
-  ArrowRightLeft,
-  Wallet
+  ArrowRightLeft
 } from 'lucide-react';
 import { shortenAddress, formatMaskedCents } from '../utils/cryptoUtils';
 import { blockchainService } from '../services/blockchainState';
@@ -40,7 +39,6 @@ export default function Navbar({
   currentGroup,
   groups = [],
   onSelectGroup,
-  isGroupUnlocked = true,
   onLockGroup,
   onResetShowcase,
   onOpenEnterLedgerModal,
@@ -249,6 +247,34 @@ export default function Navbar({
                     >
                       <Plus size={14} />
                       <span>Create New Ledger</span>
+                    </button>
+                  )}
+                  {isPrivate && onLockGroup && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onLockGroup(currentGroup.id);
+                        setIsLedgerMenuOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#b45309',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#fef3c7'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <Lock size={14} />
+                      <span>Lock Vault Session</span>
                     </button>
                   )}
                 </div>

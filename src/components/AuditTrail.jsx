@@ -11,7 +11,8 @@ import {
   ExternalLink,
   FileDown,
   Printer,
-  X
+  X,
+  RotateCcw
 } from 'lucide-react';
 import { shortenAddress } from '../utils/cryptoUtils';
 import { blockchainService } from '../services/blockchainState';
@@ -74,6 +75,35 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportAuditCsv = () => {
+    if (groupLogs.length === 0) return;
+    const headers = ['Event Index', 'Timestamp', 'Action Type', 'Actor Name', 'Actor Address', 'Details', 'Transaction Hash'];
+    const rows = groupLogs.map((l, idx) => [
+      idx + 1,
+      l.timestamp ? new Date(l.timestamp).toISOString() : '',
+      `"${(l.action || '').replace(/"/g, '""')}"`,
+      `"${(l.actorName || '').replace(/"/g, '""')}"`,
+      l.actor || '',
+      `"${(l.details || '').replace(/"/g, '""')}"`,
+      l.txHash || ''
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fairshare_audit_trail_group_${currentGroup?.id || 1}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const hasActiveFilters = selectedAction !== 'ALL' || searchQuery.trim() !== '';
+
+  const handleResetFilters = () => {
+    setSelectedAction('ALL');
+    setSearchQuery('');
+  };
+
   const filteredLogs = groupLogs.filter(l => {
     if (!l) return false;
     const matchesAction = selectedAction === 'ALL' || l.action === selectedAction;
@@ -129,6 +159,16 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
             >
               <ShieldCheck size={14} style={{ color: 'var(--color-emerald-light)' }} />
               <span>Verify Hash Chain</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleExportAuditCsv}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              title="Download entire ledger audit history as spreadsheet CSV"
+            >
+              <FileDown size={14} />
+              <span>Export CSV</span>
             </button>
             <button
               type="button"
@@ -206,23 +246,50 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
           </select>
         </div>
 
-        <div style={{ position: 'relative', minWidth: '260px' }}>
-          <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-dim)' }} />
-          <input
-            type="text"
-            className="form-input"
-            style={{ paddingLeft: '36px', paddingRight: '12px', fontSize: '13px' }}
-            placeholder="Search transaction hashes, actors, notes..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', minWidth: '240px' }}>
+            <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-dim)' }} />
+            <input
+              type="text"
+              className="form-input"
+              style={{ paddingLeft: '36px', paddingRight: '12px', fontSize: '13px' }}
+              placeholder="Search hashes, actors, notes..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleResetFilters}
+              style={{ height: '38px', padding: '0 10px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
+              title="Reset search and filters"
+            >
+              <RotateCcw size={13} />
+              <span>Reset</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* Timeline Entries */}
       {filteredLogs.length === 0 ? (
         <div className="glass-panel" style={{ padding: '40px', textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-muted)' }}>No audit events match your filter query.</p>
+          <p style={{ color: 'var(--text-muted)', marginBottom: hasActiveFilters ? '12px' : '0' }}>
+            {hasActiveFilters ? 'No audit events match your filter query.' : 'No audit events recorded in this ledger yet.'}
+          </p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleResetFilters}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <RotateCcw size={13} />
+              <span>Reset Filters</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="timeline">

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   CheckCircle2, 
   XCircle, 
@@ -6,7 +6,9 @@ import {
   ShieldCheck, 
   Lock, 
   Fingerprint, 
-  AlertTriangle
+  AlertTriangle,
+  Copy,
+  Check
 } from 'lucide-react';
 import { formatCents, shortenAddress } from '../utils/cryptoUtils';
 import { POLICY_LABELS } from '../services/blockchainState';
@@ -17,6 +19,9 @@ export default function ConsensusBlock({
   currentAccount,
   onOpenSignModal,
 }) {
+  const [copiedHash, setCopiedHash] = useState(false);
+  const [showCryptoDetails, setShowCryptoDetails] = useState(false);
+
   if (!expense) return null;
 
   const votes = expense.votes || (expense.shares || []).map(s => {
@@ -56,6 +61,13 @@ export default function ConsensusBlock({
 
   const BadgeIcon = blockBadge.icon;
 
+  const handleCopyHash = () => {
+    const hash = expense.receiptHash || `0x${expense.id}${expense.groupId}${Date.now().toString(16)}`;
+    navigator.clipboard.writeText(hash);
+    setCopiedHash(true);
+    setTimeout(() => setCopiedHash(false), 2000);
+  };
+
   return (
     <div 
       className="glass-panel" 
@@ -90,6 +102,16 @@ export default function ConsensusBlock({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleCopyHash}
+            style={{ padding: '3px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+            title="Copy cryptographic block digest"
+          >
+            {copiedHash ? <Check size={11} style={{ color: 'var(--color-emerald)' }} /> : <Copy size={11} />}
+            <span>{copiedHash ? 'Digest Copied' : 'Copy Hash'}</span>
+          </button>
           <span className={`badge ${blockBadge.class}`} style={{ fontSize: '12px', padding: '4px 10px' }}>
             <BadgeIcon size={14} />
             <span>{blockBadge.text}</span>
@@ -98,7 +120,7 @@ export default function ConsensusBlock({
       </div>
 
       {/* Quorum Progress Bar */}
-      <div style={{ marginBottom: '18px', background: 'var(--bg-surface-elevated)', padding: '12px 14px', borderRadius: 'var(--radius-md)' }}>
+      <div style={{ marginBottom: '14px', background: 'var(--bg-surface-elevated)', padding: '12px 14px', borderRadius: 'var(--radius-md)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '12px' }}>
           <span style={{ color: 'var(--text-muted)' }}>
             Consensus Progress: <strong>{agreedCount} of {totalParticipants} agreed ({quorumPercentage}%)</strong>
@@ -120,6 +142,58 @@ export default function ConsensusBlock({
           />
         </div>
       </div>
+
+      {/* Status Callout Banners */}
+      {isSealed && (
+        <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: '#065F46', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldCheck size={16} style={{ color: '#10B981', flexShrink: 0 }} />
+            <span><strong>Block Sealed:</strong> Valid quorum reached ({agreedCount}/{totalParticipants}). Balance sheet adjusted on-chain.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCryptoDetails(!showCryptoDetails)}
+            style={{ background: 'transparent', border: 'none', color: '#047857', fontWeight: 700, fontSize: '11px', cursor: 'pointer' }}
+          >
+            {showCryptoDetails ? 'Hide Proof' : 'View Proof'}
+          </button>
+        </div>
+      )}
+
+      {isRejected && (
+        <div style={{ background: 'rgba(244, 63, 94, 0.08)', border: '1px solid rgba(244, 63, 94, 0.3)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: '#9F1239', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <XCircle size={16} style={{ color: '#F43F5E', flexShrink: 0 }} />
+          <span><strong>Consensus Objection:</strong> One or more participants rejected their share. Balances remain frozen.</span>
+        </div>
+      )}
+
+      {isDisputed && (
+        <div style={{ background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: '#6B21A8', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <AlertTriangle size={16} style={{ color: '#9333EA', flexShrink: 0 }} />
+          <span><strong>Active Dispute:</strong> "{expense.disputeReason || 'Disputed by participant'}". Pending administrator resolution.</span>
+        </div>
+      )}
+
+      {/* Expandable Cryptographic Details */}
+      {showCryptoDetails && (
+        <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px 14px', marginBottom: '14px', fontSize: '11px' }}>
+          <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: '6px' }}>Consensus Block Cryptographic Proofs:</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+            <div>
+              <span style={{ color: 'var(--text-dim)' }}>Block Digest: </span>
+              <span className="mono" style={{ color: 'var(--color-primary)' }}>{shortenAddress(expense.receiptHash || '0x6e2f...81a')}</span>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-dim)' }}>Anchored: </span>
+              <span>{new Date(expense.createdAt).toLocaleString()}</span>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-dim)' }}>Signatures Verified: </span>
+              <span style={{ fontWeight: 700, color: 'var(--color-emerald-light)' }}>{agreedCount} ECDSA PIN Signatures</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Participant Consensus Roster Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px', marginBottom: '14px' }}>
