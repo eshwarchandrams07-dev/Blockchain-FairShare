@@ -9,6 +9,8 @@
     "build": "vite build",
     "compile": "node scripts/compile.js",
     "test:contracts": "node scripts/test-contracts.js",
+    "test:permutations": "node scripts/test-comprehensive-permutations.js",
+    "test:frontend": "node scripts/test-frontend-services.js",
     "deploy:base-sepolia": "node scripts/deploy.js --network base-sepolia",
     "deploy:polygon-amoy": "node scripts/deploy.js --network polygon-amoy",
     "lint": "oxlint",

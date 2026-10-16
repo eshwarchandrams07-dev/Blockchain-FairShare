@@ -174,6 +174,10 @@ function mergeLedgerStates(base, update) {
       groupMap.set(gId, {
         ...existing,
         ...g,
+        isPrivate: g.isPrivate !== undefined ? g.isPrivate : existing.isPrivate,
+        ledgerId: g.ledgerId || existing.ledgerId,
+        password: g.password || existing.password,
+        inviteCode: g.inviteCode || existing.inviteCode,
         members: sanitizeGoogleMembers(combined),
       });
     }
