@@ -46,8 +46,7 @@ export default function GroupManagement({
   const [showModalPassword, setShowModalPassword] = useState(false);
 
   // Add Member Form State
-  const [memberAddress, setMemberAddress] = useState('');
-  const [memberName, setMemberName] = useState('');
+  const [memberEmail, setMemberEmail] = useState('');
   const [memberRole, setMemberRole] = useState('MEMBER');
   const [formError, setFormError] = useState('');
 
@@ -65,8 +64,9 @@ export default function GroupManagement({
     return () => window.removeEventListener('fairshare_lan_ip_changed', handleIpChanged);
   }, []);
 
-  const currentMember = (currentGroup?.members || []).find(m => m && m.address && currentAccount && m.address.toLowerCase() === currentAccount.toLowerCase());
-  const isAdmin = currentMember?.role === 'ADMIN' || (currentGroup?.members || []).length <= 1;
+  const verifiedMembers = (currentGroup?.members || []).filter(m => m && m.address && m.email && m.email.includes('@'));
+  const currentMember = verifiedMembers.find(m => currentAccount && m.address.toLowerCase() === currentAccount.toLowerCase());
+  const isAdmin = currentMember?.role === 'ADMIN' || verifiedMembers.length <= 1;
 
   const isGroupPrivate = currentGroup.isPrivate !== false;
   const currentLedgerId = currentGroup.ledgerId || (currentGroup.id === 1 ? 'PUB-101' : `GRP-${currentGroup.id}`);
@@ -117,20 +117,16 @@ export default function GroupManagement({
   const handleAddMemberSubmit = (e) => {
     e.preventDefault();
     setFormError('');
-    if (!memberAddress.trim() || !memberAddress.startsWith('0x')) {
-      setFormError('Please provide a valid Ethereum wallet address (0x...)');
-      return;
-    }
-    if (!memberName.trim()) {
-      setFormError('Please provide a member display name');
+    const clean = (memberEmail || '').trim().toLowerCase();
+    if (!clean || !clean.includes('@') || !clean.includes('.')) {
+      setFormError('Please provide a valid Google account email address (e.g. roommate@gmail.com)');
       return;
     }
 
     try {
-      onAddMember(currentGroup.id, memberAddress.trim(), memberName.trim(), memberRole);
+      onAddMember(currentGroup.id, clean, memberRole);
       setIsAddMemberModalOpen(false);
-      setMemberAddress('');
-      setMemberName('');
+      setMemberEmail('');
     } catch (err) {
       setFormError(err.message || 'Failed to add member to group');
     }
@@ -259,7 +255,7 @@ export default function GroupManagement({
               <strong>Created:</strong> {new Date(currentGroup.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
             </div>
             <div>
-              <strong>Membership:</strong> {currentGroup.members.length} verified accounts
+              <strong>Membership:</strong> {verifiedMembers.length} verified accounts
             </div>
 
             {isGroupPrivate ? (
@@ -392,12 +388,12 @@ export default function GroupManagement({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <h4 style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Users size={20} style={{ color: 'var(--color-primary-light)' }} />
-            <span>Group Members Roster ({currentGroup.members.length})</span>
+            <span>Group Members Roster ({verifiedMembers.length})</span>
           </h4>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: currentGroup.members.length === 0 ? '1fr' : 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
-          {currentGroup.members.length === 0 ? (
+        <div style={{ display: 'grid', gridTemplateColumns: verifiedMembers.length === 0 ? '1fr' : 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
+          {verifiedMembers.length === 0 ? (
             <div 
               style={{ 
                 padding: '40px 24px', 
@@ -416,7 +412,7 @@ export default function GroupManagement({
               </p>
             </div>
           ) : (
-            (currentGroup?.members || []).filter(m => m && m.address).map(m => {
+            verifiedMembers.map(m => {
             const isUser = Boolean(currentAccount && m.address.toLowerCase() === currentAccount.toLowerCase());
             const balObj = (groupBalances || []).find(b => b && b.address && b.address.toLowerCase() === m.address.toLowerCase());
             const bal = balObj ? balObj.netBalance : 0;
@@ -615,37 +611,31 @@ export default function GroupManagement({
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '20px 0 16px' }}>
               <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
               <span style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>
-                Or manually add Ethereum Wallet (0x...)
+                Or add member by Google Email
               </span>
               <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
             </div>
 
             <form onSubmit={handleAddMemberSubmit}>
               <div className="form-group">
-                <label className="form-label">Ethereum Wallet Address</label>
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>Google Email Address *</span>
+                </label>
                 <input
-                  type="text"
-                  className="form-input mono"
-                  placeholder="0x..."
-                  value={memberAddress}
-                  onChange={e => setMemberAddress(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Display Name / Alias</label>
-                <input
-                  type="text"
+                  type="email"
                   className="form-input"
-                  placeholder="e.g. Elena, Sam"
-                  value={memberName}
-                  onChange={e => setMemberName(e.target.value)}
+                  placeholder="e.g. roommate@gmail.com"
+                  value={memberEmail}
+                  onChange={e => setMemberEmail(e.target.value)}
                   required
+                  autoFocus
                 />
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px', lineHeight: 1.4 }}>
+                  All members must authenticate using their Google account. Their Ethereum wallet address is deterministically derived from their Google identity.
+                </div>
               </div>
 
-              <div className="form-group">
+              <div className="form-group" style={{ marginTop: '14px' }}>
                 <label className="form-label">Role</label>
                 <select
                   className="form-select"
@@ -661,8 +651,9 @@ export default function GroupManagement({
                 <button type="button" className="btn btn-secondary" onClick={() => setIsAddMemberModalOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Add Member On-Chain
+                <button type="submit" className="btn btn-primary" style={{ gap: '6px' }}>
+                  <UserPlus size={14} />
+                  <span>Register Google Member</span>
                 </button>
               </div>
             </form>

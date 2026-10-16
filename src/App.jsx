@@ -364,9 +364,14 @@ export default function App() {
     addToast('Private Ledger Locked', 'Secured ledger with passkey gate. Outsiders blocked.', 'info');
   };
 
-  const handleAddMember = (groupId, addr, name, role) => {
-    blockchainService.addMemberToGroup(groupId, addr, name, role);
-    addToast('Member Registered', `Added ${name} to group roster on-chain`, 'success');
+  const handleAddMember = (groupId, emailOrAddr, nameOrRole, role) => {
+    try {
+      const newMember = blockchainService.addMemberToGroup(groupId, emailOrAddr, nameOrRole, role);
+      addToast('Google Member Registered', `Added ${newMember.email} (${newMember.name}) to ledger roster on-chain`, 'success');
+    } catch (err) {
+      addToast('Error Adding Member', err.message || 'Failed to add member', 'error');
+      throw err;
+    }
   };
 
   const handleSubmitExpense = (expenseData) => {
@@ -675,6 +680,7 @@ export default function App() {
             onUnlock={handleUnlockGroup}
             onCreateGroup={handleCreateGroup}
             onSelectGroup={handleSelectGroup}
+            currentUser={currentUser}
           />
         ) : (
           <>
@@ -949,6 +955,7 @@ export default function App() {
         isOpen={isEnterLedgerModalOpen}
         onClose={() => setIsEnterLedgerModalOpen(false)}
         onEnterLedger={handleEnterPrivateLedger}
+        currentUser={currentUser}
         groups={groups}
       />
 

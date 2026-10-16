@@ -37,16 +37,17 @@ function AddExpenseModalContent({
   const [category, setCategory] = useState('Groceries');
   const [amountStr, setAmountStr] = useState('');
   const [splitType, setSplitType] = useState(SPLIT_TYPES.EQUAL);
+  const verifiedMembers = (currentGroup?.members || []).filter(m => m && m.address && m.email && m.email.includes('@'));
   const [selectedParticipants, setSelectedParticipants] = useState(() => 
-    currentGroup?.members ? currentGroup.members.map(m => m.address) : []
+    verifiedMembers.map(m => m.address)
   );
   const [customAmounts, setCustomAmounts] = useState({}); // address => dollar string
   const [customPercentages, setCustomPercentages] = useState(() => {
-    const count = currentGroup?.members?.length || 0;
+    const count = verifiedMembers.length;
     const pcts = {};
     if (count > 0) {
       const equalPct = (100 / count).toFixed(1);
-      currentGroup.members.forEach(m => {
+      verifiedMembers.forEach(m => {
         pcts[m.address] = equalPct;
       });
     }
@@ -395,7 +396,7 @@ function AddExpenseModalContent({
           <div className="form-group">
             <label className="form-label">Participants & Share Calculation</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
-              {(currentGroup?.members || []).filter(m => m && m.address).map(m => {
+              {verifiedMembers.map(m => {
                 const isSelected = selectedParticipants.includes(m.address);
                 const shareObj = calculatedShares.find(s => s?.participant && s.participant.toLowerCase() === m.address.toLowerCase());
 

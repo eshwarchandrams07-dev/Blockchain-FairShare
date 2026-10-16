@@ -47,11 +47,26 @@ try {
     const raw = fs.readFileSync(DB_FILE, 'utf-8')
     cachedLedgerState = JSON.parse(raw)
     if (cachedLedgerState) {
-      cachedLedgerState.groups = (cachedLedgerState.groups || []).filter(g => Number(g.id) === 1)
-      cachedLedgerState.expenses = (cachedLedgerState.expenses || []).filter(e => !e.groupId || Number(e.groupId) === 1)
-      cachedLedgerState.settlements = (cachedLedgerState.settlements || []).filter(s => !s.groupId || Number(s.groupId) === 1)
-      cachedLedgerState.auditLogs = (cachedLedgerState.auditLogs || []).filter(l => !l.groupId || Number(l.groupId) === 1)
-      cachedLedgerState.currentGroupId = 1
+      if (!Array.isArray(cachedLedgerState.groups)) cachedLedgerState.groups = []
+      // Ensure Group #1 (Public Ledger) is always present
+      if (!cachedLedgerState.groups.some(g => Number(g.id) === 1)) {
+        cachedLedgerState.groups.unshift({
+          id: 1,
+          name: 'Public Ledger',
+          isPrivate: false,
+          ledgerId: 'PUB-101',
+          password: '',
+          inviteCode: 'PUBLIC',
+          currency: '₹',
+          description: 'Decentralized public expense ledger. Open for verified Google users and multi-device settlement.',
+          members: [],
+        })
+      }
+      for (const g of cachedLedgerState.groups) {
+        if (Array.isArray(g.members)) {
+          g.members = sanitizeGoogleMembers(g.members)
+        }
+      }
     }
   }
 } catch (err) {
@@ -70,108 +85,136 @@ function persistStateToDisk(state) {
   }
 }
 
+function sanitizeGoogleMembers(members) {
+  if (!Array.isArray(members)) return []
+  const seenEmails = new Set()
+  const seenAddrs = new Set()
+  const clean = []
+  for (const m of members) {
+    if (!m) continue
+    const email = (m.email || '').trim().toLowerCase()
+    const address = (m.address || '').trim().toLowerCase()
+    const name = (m.name || '').trim()
+
+    // Strictly require a valid email address
+    if (!email || !email.includes('@') || !email.includes('.')) continue
+
+    // Filter out dummy/mock personas
+    if (
+      name.startsWith('Phone User (') ||
+      name === 'Samsung' ||
+      name === 'Priya Sharma' ||
+      name === 'Rohan Verma' ||
+      name === 'Ananya Iyer' ||
+      name === 'Kabir Mehta'
+    ) {
+      continue
+    }
+
+    if (seenEmails.has(email) || (address && seenAddrs.has(address))) continue
+    seenEmails.add(email)
+    if (address) seenAddrs.add(address)
+
+    clean.push({
+      ...m,
+      email,
+      provider: 'google',
+    })
+  }
+  return clean
+}
+
 function mergeLedgerStates(base, update) {
   if (!base) {
-    if (!update) return null;
+    if (!update) return null
+    const cleanedGroups = (Array.isArray(update.groups) ? update.groups : []).map(g => ({
+      ...g,
+      members: sanitizeGoogleMembers(g.members),
+    }))
     return {
-      groups: (Array.isArray(update.groups) ? update.groups : []).filter(g => Number(g.id) === 1),
-      expenses: (Array.isArray(update.expenses) ? update.expenses : []).filter(e => !e.groupId || Number(e.groupId) === 1),
-      settlements: (Array.isArray(update.settlements) ? update.settlements : []).filter(s => !s.groupId || Number(s.groupId) === 1),
-      auditLogs: (Array.isArray(update.auditLogs) ? update.auditLogs : []).filter(l => !l.groupId || Number(l.groupId) === 1),
-      currentGroupId: 1,
-    };
+      ...update,
+      groups: cleanedGroups,
+      expenses: Array.isArray(update.expenses) ? update.expenses : [],
+      settlements: Array.isArray(update.settlements) ? update.settlements : [],
+      auditLogs: Array.isArray(update.auditLogs) ? update.auditLogs : [],
+    }
   }
-  if (!update) return base;
+  if (!update) return base
 
-  const merged = {
+  // Merge groups (preserving both Public Ledger #1 and all Private Ledgers)
+  const groupMap = new Map()
+  for (const g of base.groups || []) {
+    groupMap.set(Number(g.id), { ...g, members: sanitizeGoogleMembers(g.members) })
+  }
+  for (const g of update.groups || []) {
+    const gId = Number(g.id)
+    const existing = groupMap.get(gId)
+    if (!existing) {
+      groupMap.set(gId, { ...g, members: sanitizeGoogleMembers(g.members) })
+    } else {
+      const combined = [...(existing.members || []), ...(g.members || [])]
+      groupMap.set(gId, {
+        ...existing,
+        ...g,
+        members: sanitizeGoogleMembers(combined),
+      })
+    }
+  }
+
+  // Ensure Public Ledger #1 always exists
+  if (!groupMap.has(1)) {
+    groupMap.set(1, {
+      id: 1,
+      name: 'Public Ledger',
+      isPrivate: false,
+      ledgerId: 'PUB-101',
+      password: '',
+      inviteCode: 'PUBLIC',
+      currency: '₹',
+      description: 'Decentralized public expense ledger. Open for verified Google users and multi-device settlement.',
+      members: [],
+    })
+  }
+
+  // Merge expenses across all groups
+  const expMap = new Map()
+  for (const e of base.expenses || []) {
+    if (e && e.id) expMap.set(String(e.id), e)
+  }
+  for (const e of update.expenses || []) {
+    if (!e || !e.id) continue
+    const existing = expMap.get(String(e.id))
+    if (!existing || (e.timestamp || 0) >= (existing.timestamp || 0)) {
+      expMap.set(String(e.id), e)
+    }
+  }
+
+  // Merge settlements across all groups
+  const setMap = new Map()
+  for (const s of base.settlements || []) {
+    if (s && s.id) setMap.set(String(s.id), s)
+  }
+  for (const s of update.settlements || []) {
+    if (s && s.id) setMap.set(String(s.id), s)
+  }
+
+  // Merge audit logs across all groups
+  const logMap = new Map()
+  for (const l of base.auditLogs || []) {
+    if (l && l.id) logMap.set(`${l.id}_${l.timestamp}_${l.action}`, l)
+  }
+  for (const l of update.auditLogs || []) {
+    if (l && l.id) logMap.set(`${l.id}_${l.timestamp}_${l.action}`, l)
+  }
+
+  return {
     ...base,
     ...update,
-    currentGroupId: 1,
-    groups: (Array.isArray(update.groups) ? update.groups : (Array.isArray(base.groups) ? base.groups : [])).filter(g => Number(g.id) === 1),
-    expenses: (Array.isArray(update.expenses) ? update.expenses : (Array.isArray(base.expenses) ? base.expenses : [])).filter(e => !e.groupId || Number(e.groupId) === 1),
-    settlements: (Array.isArray(update.settlements) ? update.settlements : (Array.isArray(base.settlements) ? base.settlements : [])).filter(s => !s.groupId || Number(s.groupId) === 1),
-    auditLogs: (Array.isArray(update.auditLogs) ? update.auditLogs : (Array.isArray(base.auditLogs) ? base.auditLogs : [])).filter(l => !l.groupId || Number(l.groupId) === 1),
-  };
-
-  // Merge groups and members by address
-  if (Array.isArray(base.groups) && Array.isArray(update.groups)) {
-    const groupMap = new Map();
-    for (const g of base.groups) {
-      if (Number(g.id) === 1) {
-        groupMap.set(g.id, { ...g, members: [...(g.members || [])] });
-      }
-    }
-    for (const g of update.groups) {
-      if (Number(g.id) !== 1) continue;
-      const existing = groupMap.get(g.id);
-      if (!existing) {
-        groupMap.set(g.id, g);
-      } else {
-        const memberMap = new Map();
-        for (const m of existing.members || []) {
-          if (m && m.address) memberMap.set(m.address.toLowerCase(), m);
-        }
-        for (const m of g.members || []) {
-          if (m && m.address) {
-            const low = m.address.toLowerCase();
-            if (!memberMap.has(low)) {
-              memberMap.set(low, m);
-            } else {
-              memberMap.set(low, { ...memberMap.get(low), ...m });
-            }
-          }
-        }
-        existing.members = Array.from(memberMap.values());
-        groupMap.set(g.id, existing);
-      }
-    }
-    merged.groups = Array.from(groupMap.values());
+    groups: Array.from(groupMap.values()),
+    expenses: Array.from(expMap.values()),
+    settlements: Array.from(setMap.values()),
+    auditLogs: Array.from(logMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)),
   }
-
-  // Merge expenses
-  if (Array.isArray(base.expenses) && Array.isArray(update.expenses)) {
-    const expMap = new Map();
-    for (const e of base.expenses) {
-      if (!e.groupId || Number(e.groupId) === 1) expMap.set(String(e.id), e);
-    }
-    for (const e of update.expenses) {
-      if (e.groupId && Number(e.groupId) !== 1) continue;
-      const existing = expMap.get(String(e.id));
-      if (!existing || (e.timestamp || 0) >= (existing.timestamp || 0)) {
-        expMap.set(String(e.id), e);
-      }
-    }
-    merged.expenses = Array.from(expMap.values());
-  }
-
-  // Merge settlements
-  if (Array.isArray(base.settlements) && Array.isArray(update.settlements)) {
-    const setMap = new Map();
-    for (const s of base.settlements) {
-      if (!s.groupId || Number(s.groupId) === 1) setMap.set(String(s.id), s);
-    }
-    for (const s of update.settlements) {
-      if (s.groupId && Number(s.groupId) !== 1) continue;
-      if (!setMap.has(String(s.id))) setMap.set(String(s.id), s);
-    }
-    merged.settlements = Array.from(setMap.values());
-  }
-
-  // Merge audit logs
-  if (Array.isArray(base.auditLogs) && Array.isArray(update.auditLogs)) {
-    const logMap = new Map();
-    for (const l of base.auditLogs) {
-      if (!l.groupId || Number(l.groupId) === 1) logMap.set(`${l.id}_${l.timestamp}_${l.action}`, l);
-    }
-    for (const l of update.auditLogs) {
-      if (l.groupId && Number(l.groupId) !== 1) continue;
-      const key = `${l.id}_${l.timestamp}_${l.action}`;
-      if (!logMap.has(key)) logMap.set(key, l);
-    }
-    merged.auditLogs = Array.from(logMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-  }
-
-  return merged;
 }
 
 function setupWebSocketRelay(server) {

@@ -27,8 +27,8 @@ function generateProofJson(currentGroup, groupLogs) {
       id: currentGroup?.id,
       name: currentGroup?.name,
       creator: currentGroup?.creator,
-      members_count: (currentGroup?.members || []).length,
-      members: currentGroup?.members || [],
+      members_count: (currentGroup?.members || []).filter(m => m && m.address && m.email && m.email.includes('@')).length,
+      members: (currentGroup?.members || []).filter(m => m && m.address && m.email && m.email.includes('@')),
     },
     mathematical_integrity: {
       zero_sum_invariant: 'SUM(credits - debits) == 0.00',
@@ -474,9 +474,9 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
                   Verified Participant Wallet Identities:
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {(currentGroup.members || []).map(m => (
+                  {(currentGroup.members || []).filter(m => m && m.address && m.email && m.email.includes('@')).map(m => (
                     <div key={m.address} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', background: '#f8fafc', padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                      <span style={{ fontWeight: 600 }}>{m.name} ({m.role})</span>
+                      <span style={{ fontWeight: 600 }}>{m.name} ({m.email})</span>
                       <span className="mono" style={{ color: '#475569' }}>{m.address}</span>
                     </div>
                   ))}

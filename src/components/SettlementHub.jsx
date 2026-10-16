@@ -61,9 +61,11 @@ export default function SettlementHub({
   // Run Min-Cash-Flow debt simplification
   const simplifiedTransfers = simplifyDebts(groupBalances);
 
+  const verifiedMembers = (currentGroup?.members || []).filter(m => m && m.address && m.email && m.email.includes('@'));
+
   // Run unsimplified bilateral debt calculator for direct comparison
   const rawBilateralTransfers = calculateRawPairwiseDebts(
-    currentGroup.members || [],
+    verifiedMembers,
     expenses || [],
     settlements || [],
     currentGroup.id
