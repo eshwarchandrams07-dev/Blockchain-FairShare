@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FairShare — Product Walkthrough, UI Guide & Use Cases</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: rgba(17, 24, 39, 0.9);
+      --card-border: rgba(56, 189, 248, 0.2);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-blue: #38bdf8;
+      --accent-indigo: #818cf8;
+      --accent-green: #34d399;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --accent-purple: #c084fc;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(129, 140, 248, 0.08) 0%, transparent 40%);
+    }
+
+    /* Presentation Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 28px;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, #0284c7, #6366f1);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .slide-counter {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    button {
+      background: rgba(30, 41, 59, 0.9);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    button:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+      transform: translateY(-1px);
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      border: none;
+      color: white;
+    }
+
+    button.primary:hover {
+      background: linear-gradient(135deg, #38bdf8, #3b82f6);
+    }
+
+    /* Main Stage */
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .deck-container {
+      width: 100%;
+      max-width: 1240px;
+      aspect-ratio: 16 / 9.2;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px rgba(56, 189, 248, 0.05);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 36px 48px;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(12px) scale(0.99);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+
+    /* Slide Header */
+    .slide-header {
+      margin-bottom: 18px;
+    }
+
+    .slide-badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--accent-blue);
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 3px 9px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .slide-title {
+      font-size: 1.85rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.2;
+      background: linear-gradient(135deg, #ffffff 40%, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .slide-subtitle {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .slide-body {
+      flex: 1;
+      display: grid;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .grid-2 {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    /* Cards */
+    .card {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow-y: auto;
+    }
+
+    .card.blue-glow { border-color: rgba(56, 189, 248, 0.35); }
+    .card.purple-glow { border-color: rgba(192, 132, 252, 0.35); }
+    .card.green-glow { border-color: rgba(52, 211, 153, 0.35); }
+    .card.amber-glow { border-color: rgba(245, 158, 11, 0.35); }
+    .card.red-glow { border-color: rgba(239, 68, 68, 0.35); }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* UI Appearance Mockup Box */
+    .ui-mock-box {
+      background: #090d16;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 18px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: #e2e8f0;
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+    }
+
+    .ui-mock-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 8px;
+      margin-bottom: 6px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .ui-btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .ui-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.74rem;
+      font-weight: 600;
+    }
+
+    .pill-green { background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+    .pill-blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+    .pill-amber { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .pill-red { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+    .card-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 0.86rem;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+
+    .card-list li {
+      position: relative;
+      padding-left: 18px;
+    }
+
+    .card-list li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: var(--accent-blue);
+      font-weight: bold;
+    }
+
+    .card-list strong {
+      color: #ffffff;
+    }
+
+    /* Title Slide Special Styles */
+    .title-slide {
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 40px 60px;
+    }
+
+    .title-slide h1 {
+      font-size: 3.2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #ffffff 30%, #38bdf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .title-slide p.lead {
+      font-size: 1.2rem;
+      color: #94a3b8;
+      max-width: 840px;
+      margin: 0 auto 30px auto;
+      line-height: 1.6;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .pill {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #34d399;
+    }
+
+    /* Footer hints */
+    .footer-hint {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 28px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .kbd {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+    }
+
+    /* Print Styles */
+    @media print {
+      body {
+        background: #0b0f19 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      header, .footer-hint {
+        display: none !important;
+      }
+      main {
+        padding: 0 !important;
+      }
+      .deck-container {
+        border: none !important;
+        box-shadow: none !important;
+        max-width: none !important;
+        width: 100% !important;
+        height: 100vh !important;
+      }
+      .slide {
+        position: relative !important;
+        page-break-after: always !important;
+        opacity: 1 !important;
+        transform: none !important;
+        height: 100vh !important;
+        display: flex !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <span class="brand-badge">PRODUCT WALKTHROUGH</span>
+      <span>FairShare UI Guide & Real-World Use Cases</span>
+    </div>
+    <div class="controls">
+      <div class="slide-counter" id="slideCounter">Slide 1 / 12</div>
+      <button id="prevBtn" title="Previous Slide (←)">← Prev</button>
+      <button id="nextBtn" title="Next Slide (→ or Space)">Next →</button>
+      <button id="fullscreenBtn" title="Toggle Fullscreen (F)">⛶ Fullscreen</button>
+      <button class="primary" id="printBtn" title="Print or Save as PDF (Cmd+P)">📄 Export PDF</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="deck-container">
+
+      <!-- SLIDE 1: TITLE SLIDE -->
+      <section class="slide active title-slide" data-slide="1">
+        <span class="slide-badge">⚡ END-TO-END PRODUCT TOUR</span>
+        <h1>FairShare Walkthrough</h1>
+        <p class="lead">A Complete Visual & Architectural Guide: Interactive UI Appearances, Consensus Mechanics, SHA-256 Invoices, Min-Cash-Flow Debt Simplification, and Real-World Use Cases.</p>
+        <div class="pill-row">
+          <span class="pill">7 Integrated Views</span>
+          <span class="pill">25 UI Components</span>
+          <span class="pill">Solidity 0.8.20</span>
+          <span class="pill">React 19</span>
+          <span class="pill">Ethers.js v6</span>
+          <span class="pill">Min-Cash-Flow Solver</span>
+          <span class="pill">WebSocket Mesh</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 2: REAL-WORLD PROBLEM & 5 PRACTICAL USE CASES -->
+      <section class="slide" data-slide="2">
+        <div class="slide-header">
+          <span class="slide-badge">Context</span>
+          <h2 class="slide-title">Real-World Problem & Practical Scenarios</h2>
+          <p class="slide-subtitle">Why traditional expense trackers fail human relationships and how FairShare solves them</p>
+        </div>
+        <div class="slide-body grid-2">
+          <div class="card red-glow">
+            <h3 class="card-title" style="color: #f87171;">⚠️ Flaws of Centralized Splitwise & Excel</h3>
+            <ul class="card-list">
+              <li><strong>Unilateral Entry:</strong> One roommate enters an arbitrary ₹4,000 grocery bill; everyone is charged before anyone can review the receipt.</li>
+              <li><strong>Silent History Deletion:</strong> In spreadsheets or apps, transactions can be altered or erased months later without proof.</li>
+              <li><strong>Doctored Invoices:</strong> Receipts uploaded off-chain can be photoshopped with zero cryptographic proof of tampering.</li>
+              <li><strong>Circular Debt Churn:</strong> Round-trip payments (A owes B, B owes C, C owes A) cause unnecessary friction and banking fees.</li>
+              <li><strong>Shared Device Impersonation:</strong> On a shared laptop, anyone can click "Approve" pretending to be a flatmate.</li>
+            </ul>
+          </div>
+          <div class="card green-glow">
+            <h3 class="card-title" style="color: #34d399;">🌍 5 High-Impact Real-World Scenarios</h3>
+            <ul class="card-list">
+              <li><strong>1. Apartment Roommates:</strong> Rent, Wi-Fi, electricity, groceries. Debts only take effect after the group consensus agrees.</li>
+              <li><strong>2. Friends Group Vacations:</strong> Flights, Airbnb, rental cars, dining. Min-Cash-Flow reduces 25 circular IOUs into 2 final payments.</li>
+              <li><strong>3. Hackathon & College Teams:</strong> Shared server hosting (AWS/OpenAI APIs) & hardware with transparent admin approvals.</li>
+              <li><strong>4. Freelance Collectives & DAOs:</strong> Instant atomic mock stablecoin (FSUSD) payouts on Base Sepolia blockchain.</li>
+              <li><strong>5. Corporate Petty Cash & Clubs:</strong> Non-deletion audit trails satisfy club advisers and university tax auditors.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 3: NAVBAR & MULTI-PERSONA SWITCHING -->
+      <section class="slide" data-slide="3">
+        <div class="slide-header">
+          <span class="slide-badge">Feature 1</span>
+          <h2 class="slide-title">Navbar & Multi-Persona Switching</h2>
+          <p class="slide-subtitle">Instant persona toggling for local testing + full Web3 MetaMask connectivity</p>
+        </div>
+        <div class="slide-body grid-2">
+          <div class="card blue-glow">
+            <h3 class="card-title" style="color: #38bdf8;">🖥️ Current Frontend Appearance</h3>
+            <div class="ui-mock-box">
+              <div class="ui-mock-header">
+                <span>[ BRAND ] FairShare | Apartment 402 ▼</span>
+                <span class="ui-pill pill-blue">Base Sepolia 84532</span>
+              </div>
+              <div style="font-weight: 600; color: #94a3b8; font-size: 0.74rem;">SWITCH ACTIVE TEST PERSONA:</div>
+              <div class="ui-btn-row">
+                <span class="ui-pill pill-green">Alice (Admin) ★</span>
+                <span class="ui-pill pill-blue">Bob</span>
+                <span class="ui-pill pill-blue">Charlie</span>
+                <span class="ui-pill pill-blue">Dana</span>
+              </div>
+              <div style="margin-top: 8px; color: #cbd5e1; font-size: 0.75rem;">
+                🦊 Wallet: <span style="color: #38bdf8;">0x7099...79C8</span> | 📶 <span style="color: #34d399;">LAN WebSocket Live</span>
+              </div>
+              <div style="background: rgba(254, 240, 138, 0.1); border: 1px solid rgba(254, 240, 138, 0.25); padding: 6px 10px; border-radius: 6px; margin-top: 8px; color: #fde047; font-size: 0.72rem;">
+                🔔 Device Banner: "Logged in as Alice (Admin). You have 2 Consensus Blocks requiring your signature."
+              </div>
+            </div>
+          </div>
+          <div class="card blue-glow">
+            <h3 class="card-title" style="color: #38bdf8;">⚙️ How It Works & Real-World Use Case</h3>
+            <ul class="card-list">
+              <li><strong>Dual-Mode Architecture:</strong> Allows testing all 4 roles (Alice, Bob, Charlie, Dana) instantly without signing out, or connecting an external MetaMask wallet.</li>
+              <li><strong>Reactive Stores:</strong> When switching personas, <code>blockchainState.js</code> recalculates that specific user's net credit/debit balance, pending signature notices, and permissions in real time.</li>
+              <li><strong>Network Switcher:</strong> <code>NetworkModal.jsx</code> switches RPC endpoints between Base Sepolia, Polygon Amoy, and Localhost Anvil.</li>
+              <li><strong>Real-World Use Case:</strong> Enables college project demonstrations, hackathon pitches, and team members to test full consensus flows from a single browser.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 4: DASHBOARD OVERVIEW & FINANCIAL INTEGRITY -->
+      <section class="slide" data-slide="4">
+        <div class="slide-header">
+          <span class="slide-badge">Feature 2</span>
+          <h2 class="slide-title">Dashboard Overview & Financial Health</h2>
+          <p class="slide-subtitle">Solvency verification, net balances, category spending charts, and privacy masking</p>
+        </div>
+        <div class="slide-body grid-2">
+          <div class="card green-glow">
+            <h3 class="card-title" style="color: #34d399;">🖥️ Current Frontend Appearance</h3>
+            <div class="ui-mock-box">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;">
+                  <span style="font-size: 0.7rem; color: #94a3b8;">TOTAL APPROVED</span><br>
+                  <strong style="color: #fff; font-size: 1rem;">₹14,250.00</strong>
+                </div>
+                <div style="background: rgba(52, 211, 153, 0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.2);">
+                  <span style="font-size: 0.7rem; color: #34d399;">MY NET BALANCE</span><br>
+                  <strong style="color: #34d399; font-size: 1rem;">+₹1,250.00 (You are Owed)</strong>
+                </div>
+              </div>
+              <div style="margin-top: 8px; padding: 6px 10px; background: rgba(52, 211, 153, 0.15); border-radius: 6px; color: #34d399; font-size: 0.75rem;">
+                ✔ LEDGER INTEGRITY SOUND: Zero-Sum Verified (∑ Balances = ₹0.00)
+              </div>
+              <div style="margin-top: 8px; font-size: 0.75rem; color: #cbd5e1;">
+                Category Breakdown: Groceries (46%) | Rent/Bills (35%) | Food (19%)
+              </div>
+              <div class="ui-btn-row" style="margin-top: 8px;">
+                <span class="ui-pill pill-blue">+ Add Expense</span>
+                <span class="ui-pill pill-green">🔗 Share Auditor Link</span>
+                <span class="ui-pill pill-amber">👁️ Stealth Mask: OFF</span>
+              </div>
+            </div>
+          </div>
+          <div class="card green-glow">
+            <h3 class="card-title" style="color: #34d399;">⚙️ How It Works & Real-World Use Case</h3>
+            <ul class="card-list">
+              <li><strong>Mathematical Solvency Check:</strong> In any closed economy, total credits must equal total debits (∑ balances = 0). If the absolute sum exceeds 1 cent, the integrity gauge flashes an immediate warning.</li>
+              <li><strong>Stealth Privacy Mask:</strong> Replaces rupee figures with <code>₹••••••</code> with a single click, allowing users to safely check balances in public cafes, trains, or shared screens.</li>
+              <li><strong>Auditor Link:</strong> Generates a scoped URL allowing landlords, accountants, or parents to verify bills without voting or administrative privileges.</li>
+              <li><strong>Real-World Use Case:</strong> Guarantees flatmates that no hidden rounding errors or unauthorized debts can ever creep into rent calculations.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 5: CONSENSUS HUB & VERIFICATION BLOCKS -->
+      <section class="slide" data-slide="5">
+        <div class="slide-header">
+          <span class="slide-badge">Feature 3</span>
+          <h2 class="slide-title">Consensus Hub & Verification Blocks</h2>
+          <p class="slide-subtitle">Expenses remain pending until participants explicitly vote Agree or Reject</p>
+        </div>
+        <div class="slide-body grid-2">
+          <div class="card amber-glow">
+            <h3 class="card-title" style="color: #f59e0b;">🖥️ Current Frontend Appearance</h3>
+            <div class="ui-mock-box">
+              <div class="ui-mock-header">
+                <strong>CONSENSUS BLOCK #104</strong>
+                <span class="ui-pill pill-amber">PENDING QUORUM ⏳</span>
+              </div>
+              <div style="color: #fff; font-size: 0.85rem;">"March Wi-Fi & Electric Bill" — ₹3,200.00</div>
+              <div style="font-size: 0.72rem; color: #94a3b8;">Payer: Alice (Admin) • Policy: MAJORITY_VOTE (>50%)</div>
+              <div style="margin: 8px 0; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px;">
+                <div style="font-size: 0.72rem; color: #cbd5e1;">• Alice (Payer): Owes ₹800 <span style="color: #34d399;">[Auto-Signed ✔]</span></div>
+                <div style="font-size: 0.72rem; color: #cbd5e1;">• Bob: Owes ₹800 <span style="color: #34d399;">[AGREED ✔ (PIN 2222)]</span></div>
+                <div style="font-size: 0.72rem; color: #cbd5e1;">• Charlie: Owes ₹800 <span style="color: #fde047;">[⏳ Awaiting Signature]</span></div>
+                <div style="font-size: 0.72rem; color: #cbd5e1;">• Dana: Owes ₹800 <span style="color: #fde047;">[⏳ Awaiting Signature]</span></div>
+              </div>
+              <div style="color: #38bdf8; font-size: 0.72rem;">Quorum: 50% (2 of 4) — Needs 1 more vote to execute</div>
+              <div class="ui-btn-row" style="margin-top: 6px;">
+                <span class="ui-pill pill-green" style="padding: 4px 10px;">✔ AGREE & SIGN (PIN)</span>
+                <span class="ui-pill pill-red" style="padding: 4px 10px;">❌ REJECT & OBJECT</span>
+              </div>
+            </div>
+          </div>
+          <div class="card amber-glow">
+            <h3 class="card-title" style="color: #f59e0b;">⚙️ How It Works & Real-World Use Case</h3>
+            <ul class="card-list">
+              <li><strong>Frozen Balances:</strong> Unlike traditional apps that immediately debit everyone's account, FairShare holds the transaction in an escrowed block state.</li>
+              <li><strong>Quorum Thresholds:</strong> Under Majority Vote, as soon as Charlie votes "Agree", the contract executes <code>approveExpense()</code> and permanently updates ledger balances.</li>
+              <li><strong>Objection Protection:</strong> If Dana clicks "Reject & Object", she logs a formal reason ("I was traveling all March"). The block enters DISPUTED state and halts execution.</li>
+              <li><strong>Real-World Use Case:</strong> Prevents a roommate from logging an inflated utility bill without roommates vetting and approving their exact portion.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 6: ANTI-CHEAT CRYPTOGRAPHIC PIN SIGNATURE -->
+      <section class="slide" data-slide="6">
+        <div class="slide-header">
+          <span class="slide-badge">Feature 4</span>
+          <h2 class="slide-title">Anti-Cheat Cryptographic PIN Signature</h2>
+          <p class="slide-subtitle">Simulated ECDSA private key signature preventing impersonation on shared devices</p>
+        </div>
+        <div class="slide-body grid-2">
+          <div class="card purple-glow">
+            <h3 class="card-title" style="color: #c084fc;">🖥️ Current Frontend Appearance</h3>
+            <div class="ui-mock-box" style="text-align: center; padding: 22px;">
+              <div style="font-weight: 700; color: #fff; font-size: 0.85rem; margin-bottom: 4px;">
+                MODAL: "CRYPTOGRAPHIC PIN VERIFICATION REQUIRED"
+              </div>
+              <div style="font-size: 0.74rem; color: #94a3b8; margin-bottom: 12px;">
+                Signing as: Charlie (Wallet: 0x90F7...4bE1) • Approve ₹800 share
+              </div>
+              <div style="font-size: 0.75rem; color: #cbd5e1; margin-bottom: 8px;">Enter 4-Digit Security PIN:</div>
+              <div style="font-size: 1.8rem; letter-spacing: 12px; color: #38bdf8; margin-bottom: 12px;">
+                ● ● ● ●
+              </div>
+              <div style="background: rgba(255,255,255,0.04); padding: 8px; border-radius: 6px; font-size: 0.7rem; color: #94a3b8; text-align: left; margin-bottom: 12px;">
+                🛡️ Anti-Cheat Notice: "This PIN simulates your ECDSA private key. Even if another user selects your persona on this device, they cannot vote without your secret PIN."
+              </div>
+              <div class="ui-btn-row" style="justify-content: center;">
+                <span class="ui-pill pill-green" style="padding: 6px 14px;">✍️ SIGN & CAST VOTE</span>
+                <span class="ui-pill pill-amber" style="padding: 6px 14px;">CANCEL</span>
+              </div>
+            </div>
+          </div>
+          <div class="card purple-glow">
+            <h3 class="card-title" style="color: #c084fc;">⚙️ How It Works & Real-World Use Case</h3>
+            <ul class="card-list">
+              <li><strong>The Living Room Problem:</strong> In shared student apartments, roommates frequently use a common laptop or leave an iPad on the coffee table. Without security, any user could easily vote on someone else's behalf.</li>
+              <li><strong>ECDSA Private Key Simulation:</strong> Every persona is provisioned with a secret PIN (Alice: <code>1111</code>, Bob: <code>2222</code>, Charlie: <code>3333</code>, Dana: <code>4444</code>). <code>authService.js</code> checks the hash before signing.</li>
+              <li><strong>Cryptographic Proof:</strong> The transaction is logged with the voter's address, timestamp, and signature state in the immutable audit trail.</li>
+              <li><strong>Real-World Use Case:</strong> Guarantees zero-trust security on shared hardware, ensuring that no member can be fraudulently billed.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 7: ADD EXPENSE & SHA-256 RECEIPT HASHING -->
+      <section class="slide" data-slide="7">
+        <div class="slide-header">
+          <span class="slide-badge">Feature 5</span>
+          <h2 class="slide-title">Add Expense & SHA-256 Receipt Hashing</h2>
+          <p class="slide-subtitle">Equal, Exact, and % splits + client-side document fingerprinting</p>
+        </div>
+        <div class="slide-body grid-2">
+          <div class="card blue-glow">
+            <h3 class="card-title" style="color: #38bdf8;">🖥️ Current Frontend Appearance</h3>
+            <div class="ui-mock-box">
+              <div class="ui-mock-header">
+                <strong>MODAL: "LOG NEW EXPENSE FOR CONSENSUS"</strong>
+                <span class="ui-pill pill-blue">Apartment 402</span>
+              </div>
+              <div style="font-size: 0.74rem; color: #cbd5e1;">
+                Title: [ Team Dinner at Bistro ] • Total: [ ₹4,800.00 ]<br>
+                Category: [ 🍔 Food & Dining ]
+              </div>
+              <div style="margin: 6px 0; font-size: 0.74rem;">
+                Split Type: <span class="ui-pill pill-blue">EQUAL</span> <span class="ui-pill pill-green">EXACT</span> <span class="ui-pill pill-amber">PERCENT</span>
+                <span style="color: #34d399; margin-left: 8px;">(₹1,200/person across 4 members)</span>
+              </div>
+              <div style="border: 2px dashed rgba(56, 189, 248, 0.4); padding: 10px; border-radius: 8px; text-align: center; margin: 8px 0;">
+                <div style="color: #38bdf8; font-size: 0.75rem; font-weight: 600;">📁 Drop Receipt PDF / Image Here</div>
+                <div style="color: #fff; font-size: 0.72rem; margin-top: 2px;">"restaurant_bill.pdf" (1.2 MB)</div>
+                <div style="color: #34d399; font-size: 0.7rem; margin-top: 2px;">SHA-256: 0xa48e2f...7c19 [ COMPUTED LOCALLY ✔ ]</div>
+                <div style="color: #818cf8; font-size: 0.7rem;">IPFS CID: QmZtmD2q...X9w2 [ ANCHORED TO CHAIN ]</div>
+              </div>
+              <div class="ui-btn-row">
+                <span class="ui-pill pill-green" style="padding: 6px 14px;">🚀 SUBMIT TO CONSENSUS BLOCK</span>
+              </div>
+            </div>
+          </div>
+          <div class="card blue-glow">
+            <h3 class="card-title" style="color: #38bdf8;">⚙️ How It Works & Real-World Use Case</h3>
+            <ul class="card-list">
+              <li><strong>Web Crypto API SHA-256:</strong> The file is read into memory as an <code>ArrayBuffer</code>. <code>crypto.subtle.digest</code> computes a tamper-proof 256-bit cryptographic digest before any network call.</li>
+              <li><strong>Storage Cost Optimization:</strong> Only the 32-byte hash and simulated IPFS CID are committed to the blockchain, minimizing gas costs while securing mathematical proof of invoice integrity.</li>
+              <li><strong>Flexible Split Calculations:</strong> Automatically calculates exact decimal splits or percentage breakdowns with instant balance validation.</li>
+              <li><strong>Real-World Use Case:</strong> If a roommate later edits the PDF invoice in Photoshop, the SHA-256 hash immediately changes, catching doctored bills instantly.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 8: RECEIPT VERIFIER WORKBENCH -->
+      <section class="slide" data-slide="8">
+        <div class="slide-header">
+          <span class="slide-badge">Feature 6</span>
+          <h2 class="slide-title">Receipt Verifier & Integrity Workbench</h2>
+          <p class="slide-subtitle">Zero-trust drag-and-drop tool proving document authenticity against on-chain block hash</p>
+        </div>
+        <div class="slide-body grid-2">
+          <div class="card green-glow">
+            <h3 class="card-title" style="color: #34d399;">🖥️ Current Frontend Appearance</h3>
+            <div class="ui-mock-box">
+              <div class="ui-mock-header">
+                <strong>INVOICE INTEGRITY VERIFIER TAB</strong>
+                <span class="ui-pill pill-green">ZERO-TRUST AUDIT</span>
+              </div>
+              <div style="font-size: 0.74rem; color: #94a3b8;">
+                Select Block to Audit: [ #104: Wi-Fi & Electric Bill ▼ ]<br>
+                Expected On-Chain Hash: <span style="color: #38bdf8;">0xa48e2f...7c19</span>
+              </div>
+              <div style="border: 2px dashed rgba(52, 211, 153, 0.4); padding: 14px; border-radius: 8px; text-align: center; margin: 10px 0;">
+                <div style="color: #34d399; font-size: 0.8rem; font-weight: 600;">🔍 DROP FILE HERE TO VERIFY INTEGRITY</div>
+                <div style="color: #fff; font-size: 0.72rem; margin-top: 4px;">Loaded: "electric_march_final.pdf"</div>
+                <div style="color: #34d399; font-size: 0.7rem;">Local Digest: 0xa48e2f...7c19</div>
+              </div>
+              <div style="background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.3); padding: 8px; border-radius: 6px; font-size: 0.72rem; color: #34d399;">
+                ✔ 100% CRYPTOGRAPHIC MATCH CONFIRMED<br>
+                <span style="color: #cbd5e1;">"Matches the exact bytes signed by Alice and approved at Block #104."</span>
+              </div>
+            </div>
+          </div>
+          <div class="card green-glow">
+            <h3 class="card-title" style="color: #34d399;">⚙️ How It Works & Real-World Use Case</h3>
+            <ul class="card-list">
+              <li><strong>Independent Verification:</strong> Any member or external auditor can drag and drop any document to verify authenticity without contacting the original uploader.</li>
+              <li><strong>Bitwise Tamper Detection:</strong> If even a single digit or date is modified, the computed SHA-256 hash completely diverges, instantly displaying an alert: <code>❌ TAMPER DETECTED</code>.</li>
+              <li><strong>Zero Cloud Dependence:</strong> The verification happens directly in the user's browser, eliminating reliance on proprietary cloud storage or trusted third parties.</li>
+              <li><strong>Real-World Use Case:</strong> Student clubs or event organizing committees can prove to university advisors that every expense reimbursement is 100% genuine.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 9: MIN-CASH-FLOW SETTLEMENT HUB -->
+      <section class="slide" data-slide="9">
+        <div class="slide-header">
+          <span class="slide-badge">Feature 7</span>
+          <h2 class="slide-title">Min-Cash-Flow Settlement Hub</h2>
+          <p class="slide-subtitle">Graph debt simplification algorithm + atomic crypto & off-chain UPI settlements</p>
+        </div>
+        <div class="slide-body grid-2">
+          <div class="card blue-glow">
+            <h3 class="card-title" style="color: #38bdf8;">🖥️ Current Frontend Appearance</h3>
+            <div class="ui-mock-box">
+              <div class="ui-mock-header">
+                <strong>MIN-CASH-FLOW OPTIMIZED DIRECT SETTLEMENT PLAN</strong>
+                <span class="ui-pill pill-blue">8 DEBTS → 2 PAYMENTS</span>
+              </div>
+              <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px; margin-bottom: 8px;">
+                <div style="font-weight: 600; color: #fff; font-size: 0.8rem;">Bob owes Alice: ₹1,200.00</div>
+                <div class="ui-btn-row">
+                  <span class="ui-pill pill-blue">⚡ Pay with FSUSD (Crypto)</span>
+                  <span class="ui-pill pill-green">📱 Pay UPI / Cash</span>
+                </div>
+              </div>
+              <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px;">
+                <div style="font-weight: 600; color: #fff; font-size: 0.8rem;">Charlie owes Dana: ₹650.00</div>
+                <div class="ui-btn-row">
+                  <span class="ui-pill pill-blue">⚡ Pay with FSUSD (Crypto)</span>
+                  <span class="ui-pill pill-green">📱 Pay UPI / Cash</span>
+                </div>
+              </div>
+              <div style="font-size: 0.72rem; color: #fde047; margin-top: 8px;">
+                🎉 Canvas Confetti celebration animation triggers upon successful settlement!
+              </div>
+            </div>
+          </div>
+          <div class="card blue-glow">
+            <h3 class="card-title" style="color: #38bdf8;">⚙️ How It Works & Real-World Use Case</h3>
+            <ul class="card-list">
+              <li><strong>Graph Reduction Engine:</strong> Solves the $N$-party circular debt problem. Computes net balances for each person, then iteratively pairs the maximum debtor with the maximum creditor.</li>
+              <li><strong>Dual-Mode Settlement:</strong>
+                <br>• <em>Atomic On-Chain Crypto:</em> Transfers mock stablecoin (FSUSD) directly on Base Sepolia. Balances auto-settle upon transaction receipt.
+                <br>• <em>Off-Chain UPI / Cash:</em> Payer enters their UPI Tx ID; payee clicks "Confirm Received" to settle the ledger.</li>
+              <li><strong>Real-World Use Case:</strong> After a 5-person week-long trip with 30 separate expenses, members settle the entire vacation with just 2 or 3 direct payments.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 10: IMMUTABLE AUDIT TRAIL & CORRECTIONS -->
+      <section class="slide" data-slide="10">
+        <div class="slide-header">
+          <span class="slide-badge">Feature 8</span>
+          <h2 class="slide-title">Immutable Audit Trail & Non-Deletion Diffs</h2>
+          <p class="slide-subtitle">Permanent ledger history preserving original entries while anchoring versioned revisions</p>
+        </div>
+        <div class="slide-body grid-2">
+          <div class="card purple-glow">
+            <h3 class="card-title" style="color: #c084fc;">🖥️ Current Frontend Appearance</h3>
+            <div class="ui-mock-box">
+              <div class="ui-mock-header">
+                <strong>IMMUTABLE AUDIT TIMELINE FEED</strong>
+                <span class="ui-pill pill-purple">ZERO-DELETION LEDGER</span>
+              </div>
+              <div style="background: rgba(245, 158, 11, 0.08); border-left: 3px solid #f59e0b; padding: 8px 10px; border-radius: 4px; margin-bottom: 8px;">
+                <div style="font-weight: 700; color: #f59e0b; font-size: 0.75rem;">EXPENSE REVISION ANCHOR</div>
+                <div style="color: #fff; font-size: 0.72rem;">Block #102 revised to Block #105 by Alice (Admin)</div>
+                <div style="color: #f87171; font-size: 0.7rem;">- Old Total: ₹3,000.00 (Alice, Bob, Charlie)</div>
+                <div style="color: #34d399; font-size: 0.7rem;">+ New Total: ₹3,500.00 (Alice, Bob, Charlie, Dana)</div>
+                <div style="color: #94a3b8; font-size: 0.7rem;">Reason: "Dana joined late; included in electricity share."</div>
+                <div style="color: #38bdf8; font-size: 0.7rem;">Ancestor Link: Immutably linked to Block #102 (Never Deleted)</div>
+              </div>
+              <div style="background: rgba(52, 211, 153, 0.08); border-left: 3px solid #34d399; padding: 8px 10px; border-radius: 4px;">
+                <div style="font-weight: 700; color: #34d399; font-size: 0.75rem;">SETTLEMENT CONFIRMED</div>
+                <div style="color: #cbd5e1; font-size: 0.72rem;">Bob -> Alice: ₹1,200 FSUSD Transferred (Tx: 0x9f...4a)</div>
+              </div>
+            </div>
+          </div>
+          <div class="card purple-glow">
+            <h3 class="card-title" style="color: #c084fc;">⚙️ How It Works & Real-World Use Case</h3>
+            <ul class="card-list">
+              <li><strong>Why No Delete Button?</strong> Deleting financial transactions destroys accountability and invites disputes. In FairShare, records can only be corrected, never deleted.</li>
+              <li><strong>Parent-Child Delta Chains:</strong> <code>correctExpense()</code> flags the original record as <code>CORRECTED</code> and creates a child block with the updated shares and an ancestor pointer.</li>
+              <li><strong>Mandatory Re-Voting:</strong> The newly corrected block must be re-approved by the group's quorum policy before ledger balances are adjusted.</li>
+              <li><strong>Real-World Use Case:</strong> At the end of a lease, roommates have an undeniable audit trail of every adjustment made throughout the year.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 11: MULTI-DEVICE LAN REAL-TIME SYNC -->
+      <section class="slide" data-slide="11">
+        <div class="slide-header">
+          <span class="slide-badge">Feature 9</span>
+          <h2 class="slide-title">Multi-Device LAN Real-Time Sync</h2>
+          <p class="slide-subtitle">Instant state replication across phones & laptops over local Wi-Fi with QR code scanning</p>
+        </div>
+        <div class="slide-body grid-2">
+          <div class="card green-glow">
+            <h3 class="card-title" style="color: #34d399;">🖥️ Current Frontend Appearance</h3>
+            <div class="ui-mock-box" style="text-align: center; padding: 20px;">
+              <div style="font-weight: 700; color: #fff; font-size: 0.85rem; margin-bottom: 4px;">
+                CONNECT OTHER PHONES ON YOUR WI-FI
+              </div>
+              <div style="font-size: 0.75rem; color: #34d399; font-weight: 600; margin-bottom: 12px;">
+                Auto-Detected LAN IP: http://192.168.1.42:5173
+              </div>
+              <div style="background: white; color: black; display: inline-block; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; margin-bottom: 12px;">
+                [ QR CODE: SCAN WITH PHONE CAMERA ]
+              </div>
+              <div style="font-size: 0.72rem; color: #cbd5e1; text-align: left; background: rgba(255,255,255,0.04); padding: 8px; border-radius: 6px;">
+                • Active Connected Clients: 3 (Laptop, iPhone, Android)<br>
+                • WebSocket Latency: 4ms [ 🟢 ULTRA-FAST LAN ]<br>
+                • Disk Persistence: <code>fairshare_ledger_db.json</code> [ CACHED ✔ ]
+              </div>
+            </div>
+          </div>
+          <div class="card green-glow">
+            <h3 class="card-title" style="color: #34d399;">⚙️ How It Works & Real-World Use Case</h3>
+            <ul class="card-list">
+              <li><strong>Zero-Config LAN Detection:</strong> <code>server.js</code> interrogates local network interfaces to extract the Wi-Fi IPv4 address and renders a dynamic QR code.</li>
+              <li><strong>Live WebSocket Mesh:</strong> When Alice logs an expense on her laptop, the WebSocket broadcast (<code>/fairshare-sync</code>) updates Bob's phone screen in under 10 milliseconds.</li>
+              <li><strong>Offline Replay Resilience:</strong> If a phone loses Wi-Fi and reconnects, <code>server.js</code> immediately replays the cached ledger state from disk.</li>
+              <li><strong>Real-World Use Case:</strong> Roommates sitting together in the living room can collaborate, vote, inspect receipts, and settle debts on their own phones simultaneously.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 12: GROUP GOVERNANCE & EXECUTIVE SUMMARY -->
+      <section class="slide" data-slide="12">
+        <div class="slide-header">
+          <span class="slide-badge">Feature 10</span>
+          <h2 class="slide-title">Group Governance & Executive Summary</h2>
+          <p class="slide-subtitle">Configurable smart contract consensus policies and overall project recap</p>
+        </div>
+        <div class="slide-body grid-2">
+          <div class="card blue-glow">
+            <h3 class="card-title" style="color: #38bdf8;">🖥️ Current Frontend Appearance</h3>
+            <div class="ui-mock-box">
+              <div class="ui-mock-header">
+                <strong>GROUP GOVERNANCE & CONSENSUS SETTINGS</strong>
+                <span class="ui-pill pill-blue">Apartment 402</span>
+              </div>
+              <div style="font-size: 0.74rem; color: #94a3b8; margin-bottom: 6px;">Approval Policy Selector:</div>
+              <div style="font-size: 0.72rem; color: #cbd5e1; display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+                <div>( ) AUTO_APPROVE (Optimistic with dispute window)</div>
+                <div style="color: #34d399; font-weight: 700;">(●) MAJORITY_VOTE (>50% agreement required) [ACTIVE]</div>
+                <div>( ) UNANIMOUS_VOTE (100% agreement required)</div>
+                <div>( ) ADMIN_ONLY (Only Alice can approve)</div>
+              </div>
+              <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px; font-size: 0.72rem; color: #cbd5e1;">
+                Member Roles: Alice [ADMIN 👑], Bob [MEMBER], Charlie [MEMBER], Dana [MEMBER]
+              </div>
+            </div>
+          </div>
+          <div class="card blue-glow">
+            <h3 class="card-title" style="color: #38bdf8;">🏆 Summary of Project Value</h3>
+            <ul class="card-list">
+              <li><strong>Zero Discrepancies:</strong> All financial arithmetic is verified on-chain, eliminating spreadsheet tampering and disputes.</li>
+              <li><strong>Cryptographic Invoices:</strong> SHA-256 client-side hashing anchors invoice fingerprints to block headers, preventing doctored bills.</li>
+              <li><strong>Min-Cash-Flow Efficiency:</strong> Condenses messy multi-party circular obligations into the theoretical minimum number of direct payments.</li>
+              <li><strong>Real-World Ready:</strong> Tested on Base Sepolia and Polygon Amoy, with full support for shared devices, QR sync, and external auditors.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="footer-hint">
+    <span>💡 Use <span class="kbd">←</span> <span class="kbd">→</span> or <span class="kbd">Space</span> to navigate slides</span>
+    <span>Press <span class="kbd">F</span> for Fullscreen &bull; Press <span class="kbd">P</span> to Export PDF</span>
+  </footer>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    let currentSlide = 1;
+
+    const counter = document.getElementById('slideCounter');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const printBtn = document.getElementById('printBtn');
+
+    function showSlide(index) {
+      if (index < 1) index = 1;
+      if (index > totalSlides) index = totalSlides;
+      currentSlide = index;
+
+      slides.forEach((slide, idx) => {
+        slide.classList.toggle('active', idx + 1 === currentSlide);
+      });
+
+      counter.textContent = `Slide ${currentSlide} / ${totalSlides}`;
+      prevBtn.disabled = currentSlide === 1;
+      nextBtn.disabled = currentSlide === totalSlides;
+    }
+
+    prevBtn.addEventListener('click', () => showSlide(currentSlide - 1));
+    nextBtn.addEventListener('click', () => showSlide(currentSlide + 1));
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        showSlide(currentSlide + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        showSlide(currentSlide - 1);
+      } else if (e.key.toLowerCase() === 'f') {
+        toggleFullscreen();
+      } else if (e.key.toLowerCase() === 'p') {
+        window.print();
+      }
+    });
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+    printBtn.addEventListener('click', () => window.print());
+
+    showSlide(1);
+  </script>
+</body>
+</html>
