@@ -66,7 +66,7 @@ export default function ConnectDevicesModal({
 
   const isPrivate = currentGroup?.isPrivate !== false;
   const ledgerId = currentGroup?.ledgerId || (currentGroup?.id === 1 ? 'PUB-101' : 'APT-402');
-  const password = currentGroup?.password || currentGroup?.inviteCode || inviteCode || 'FS-4020';
+  const password = currentGroup?.password || currentGroup?.inviteCode || 'FS-4020';
 
   const effectiveHost = getEffectiveHost(lanIp);
   const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';

@@ -4,7 +4,8 @@ import {
   UploadCloud, 
   FileCheck2, 
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Eye
 } from 'lucide-react';
 import { dollarsToCents, generateIpfsCid, formatCents } from '../utils/cryptoUtils';
 import { SPLIT_TYPES } from '../services/blockchainState';
@@ -549,25 +550,46 @@ function AddExpenseModalContent({
                     <span style={{ color: 'var(--text-dim)', fontSize: '10px' }}>
                       Provider: {ipfsProvider || 'IPFS (CIDv1)'}
                     </span>
-                    {ipfsGatewayUrl && (
-                      <a
-                        href={ipfsGatewayUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          color: '#0052FF',
-                          fontWeight: 700,
-                          fontSize: '11px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '3px',
-                          textDecoration: 'none'
-                        }}
-                      >
-                        <span>Preview on IPFS Gateway</span>
-                        <ExternalLink size={11} />
-                      </a>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {receiptFile && (
+                        <a
+                          href={ipfsService.getLocalPreviewUrl(ipfsCid) || URL.createObjectURL(receiptFile)}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            color: 'var(--color-emerald-light)',
+                            fontWeight: 700,
+                            fontSize: '11px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            textDecoration: 'none'
+                          }}
+                        >
+                          <Eye size={11} />
+                          <span>View File</span>
+                        </a>
+                      )}
+                      {ipfsGatewayUrl && (
+                        <a
+                          href={ipfsGatewayUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            color: '#0052FF',
+                            fontWeight: 700,
+                            fontSize: '11px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            textDecoration: 'none'
+                          }}
+                        >
+                          <span>Gateway</span>
+                          <ExternalLink size={11} />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

@@ -379,7 +379,7 @@ export default function DashboardOverview({
                   width: `${cat.pct}%`,
                   background: categoryColors[idx % categoryColors.length]
                 }}
-                title={`${cat.name}: ${formatCents(cat.amount)} (${cat.pct}%)`}
+                title={`${cat.name}: ${formatMaskedCents(cat.amount, isPrivacyMaskActive)} (${cat.pct}%)`}
               />
             ))}
           </div>
@@ -402,7 +402,7 @@ export default function DashboardOverview({
               >
                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: categoryColors[idx % categoryColors.length] }} />
                 <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{cat.name}:</span>
-                <span className="mono" style={{ color: 'var(--text-muted)' }}>{formatCents(cat.amount)}</span>
+                <span className="mono" style={{ color: 'var(--text-muted)' }}>{formatMaskedCents(cat.amount, isPrivacyMaskActive)}</span>
                 <span style={{ fontSize: '10px', color: 'var(--text-dim)', fontWeight: 700 }}>({cat.pct}%)</span>
               </div>
             ))}

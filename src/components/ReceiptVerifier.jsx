@@ -46,9 +46,17 @@ export default function ReceiptVerifier({ expenses, currentGroup }) {
   const verifyAgainstExpenses = (hashToCheck) => {
     if (!hashToCheck) return;
     const cleanHash = String(hashToCheck).trim().toLowerCase();
-    const matchedExp = (expenses || []).find(
-      e => e?.receiptHash && String(e.receiptHash).toLowerCase() === cleanHash
-    );
+    const cleanNormalizedCid = cleanHash.replace('ipfs://', '');
+    const matchedExp = (expenses || []).find(e => {
+      if (!e) return false;
+      const expReceiptHash = String(e.receiptHash || '').toLowerCase();
+      const expIpfsCid = String(e.ipfsCid || '').toLowerCase().replace('ipfs://', '');
+      return (
+        expReceiptHash === cleanHash ||
+        expIpfsCid === cleanNormalizedCid ||
+        expIpfsCid === cleanHash
+      );
+    });
 
     if (matchedExp) {
       setMatchResult({

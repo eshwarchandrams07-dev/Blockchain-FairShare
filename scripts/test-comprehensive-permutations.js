@@ -168,6 +168,13 @@ function sanitizeGoogleMembers(members) {
       provider: 'google'
     });
   }
+
+  // If there are verified Google members but none has role 'ADMIN', ensure the first joined Google user is ADMIN
+  if (valid.length > 0 && !valid.some(m => m.role === 'ADMIN')) {
+    valid[0].role = 'ADMIN';
+    valid[0].avatar = '👑';
+  }
+
   return valid;
 }
 
@@ -200,6 +207,7 @@ const mixedMembersPermutation = [
 const sanitized = sanitizeGoogleMembers(mixedMembersPermutation);
 assert(sanitized.length === 2, `Sanitization drops all unauthenticated and malformed members (Kept exactly 2/14)`);
 assert(sanitized[0].email === 'eshwarchandrams@gmail.com', 'Sanitization preserves first verified Google member');
+assert(sanitized[0].role === 'ADMIN', 'First joined Google user is automatically assigned ADMIN role');
 assert(sanitized[1].email === 'bob@gmail.com', 'Sanitization preserves second verified Google member');
 assert(sanitized.every(m => m.provider === 'google' && m.email.includes('@')), 'All sanitized members have provider: "google"');
 

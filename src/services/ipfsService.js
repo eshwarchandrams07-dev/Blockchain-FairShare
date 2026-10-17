@@ -6,6 +6,8 @@
  * 3. Public IPFS Gateways (ipfs.io, dweb.link, gateway.pinata.cloud)
  */
 
+import { ethers } from 'ethers';
+
 // Convert bytes to RFC-4648 base32 lowercase string
 function uint8ArrayToBase32(bytes) {
   const alphabet = 'abcdefghijklmnopqrstuvwxyz234567';
@@ -28,10 +30,33 @@ function uint8ArrayToBase32(bytes) {
 
 /**
  * Compute valid standard IPFS CIDv1 from a SHA-256 digest
+ * Accepts ArrayBuffer, Uint8Array, or 64-character hex string (0x...)
  * Format: 0x01 (CIDv1) + 0x55 (raw binary codec) + 0x12 (sha2-256) + 0x20 (32 bytes) + 32-byte digest
  */
-export function computeIpfsCidV1(sha256ArrayBuffer) {
-  const digestBytes = new Uint8Array(sha256ArrayBuffer);
+export function computeIpfsCidV1(input) {
+  if (!input) return 'bafkreiaaaaaaaafairshare';
+
+  let digestBytes;
+  if (typeof input === 'string') {
+    const clean = input.replace('0x', '').trim();
+    if (clean.length === 64) {
+      digestBytes = new Uint8Array(32);
+      for (let i = 0; i < 32; i++) {
+        digestBytes[i] = parseInt(clean.substr(i * 2, 2), 16);
+      }
+    } else {
+      digestBytes = new TextEncoder().encode(input);
+    }
+  } else if (input instanceof Uint8Array) {
+    digestBytes = input;
+  } else if (input instanceof ArrayBuffer) {
+    digestBytes = new Uint8Array(input);
+  } else if (ArrayBuffer.isView(input)) {
+    digestBytes = new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+  } else {
+    digestBytes = new Uint8Array(input);
+  }
+
   const header = new Uint8Array([0x01, 0x55, 0x12, 0x20]);
   const combined = new Uint8Array(header.length + digestBytes.length);
   combined.set(header);
@@ -44,23 +69,31 @@ class IpfsService {
     this.jwtStorageKey = 'fairshare_pinata_jwt';
     this.gatewayStorageKey = 'fairshare_ipfs_gateway';
     this.defaultGateway = 'https://ipfs.io/ipfs/';
+    this.currentGateway = this.defaultGateway;
+    this.currentJwt = '';
     this.blobCache = new Map(); // cid => objectUrl for instant local preview
   }
 
   getPinataJwt() {
     try {
-      return localStorage.getItem(this.jwtStorageKey) || '';
+      if (typeof localStorage !== 'undefined') {
+        return localStorage.getItem(this.jwtStorageKey) || this.currentJwt || '';
+      }
+      return this.currentJwt || '';
     } catch {
-      return '';
+      return this.currentJwt || '';
     }
   }
 
   setPinataJwt(jwt) {
+    this.currentJwt = jwt ? jwt.trim() : '';
     try {
-      if (jwt) {
-        localStorage.setItem(this.jwtStorageKey, jwt.trim());
-      } else {
-        localStorage.removeItem(this.jwtStorageKey);
+      if (typeof localStorage !== 'undefined') {
+        if (jwt) {
+          localStorage.setItem(this.jwtStorageKey, jwt.trim());
+        } else {
+          localStorage.removeItem(this.jwtStorageKey);
+        }
       }
       return true;
     } catch {
@@ -70,20 +103,26 @@ class IpfsService {
 
   getGateway() {
     try {
-      return localStorage.getItem(this.gatewayStorageKey) || this.defaultGateway;
+      if (typeof localStorage !== 'undefined') {
+        return localStorage.getItem(this.gatewayStorageKey) || this.currentGateway || this.defaultGateway;
+      }
+      return this.currentGateway || this.defaultGateway;
     } catch {
-      return this.defaultGateway;
+      return this.currentGateway || this.defaultGateway;
     }
   }
 
   setGateway(gatewayUrl) {
+    let clean = gatewayUrl ? gatewayUrl.trim() : '';
+    if (clean && !clean.endsWith('/')) clean += '/';
+    this.currentGateway = clean || this.defaultGateway;
     try {
-      if (gatewayUrl) {
-        let clean = gatewayUrl.trim();
-        if (!clean.endsWith('/')) clean += '/';
-        localStorage.setItem(this.gatewayStorageKey, clean);
-      } else {
-        localStorage.removeItem(this.gatewayStorageKey);
+      if (typeof localStorage !== 'undefined') {
+        if (clean) {
+          localStorage.setItem(this.gatewayStorageKey, clean);
+        } else {
+          localStorage.removeItem(this.gatewayStorageKey);
+        }
       }
     } catch {}
   }
@@ -99,7 +138,7 @@ class IpfsService {
   getLocalPreviewUrl(cid) {
     if (!cid) return null;
     const cleanCid = cid.replace('ipfs://', '').trim();
-    return this.blobCache.get(cleanCid) || null;
+    return this.blobCache.get(cleanCid) || this.blobCache.get(`ipfs://${cleanCid}`) || null;
   }
 
   async testPinataAuth(jwtToTest) {
@@ -139,26 +178,43 @@ class IpfsService {
 
   /**
    * Pin a receipt file to IPFS
-   * 1. Generates authentic SHA-256 IPFS CIDv1
+   * 1. Generates authentic SHA-256 IPFS CIDv1 (using Web Crypto or pure-JS ethers fallback)
    * 2. If Pinata JWT is configured, uploads directly to Pinata Cloud
    * 3. Stores in local blob cache for instant browser previews
    */
   async pinFile(file, metadata = {}) {
     if (!file) throw new Error('No file provided for IPFS pinning');
 
-    // 1. Compute SHA-256 arrayBuffer
+    // 1. Compute SHA-256 digest
     const arrayBuffer = await file.arrayBuffer();
-    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    let hashHex;
+    let digestBytes;
+
+    if (typeof crypto !== 'undefined' && crypto.subtle && typeof crypto.subtle.digest === 'function') {
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      digestBytes = new Uint8Array(hashBuffer);
+      const hashArray = Array.from(digestBytes);
+      hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } else {
+      hashHex = ethers.sha256(new Uint8Array(arrayBuffer));
+      const clean = hashHex.slice(2);
+      digestBytes = new Uint8Array(32);
+      for (let i = 0; i < 32; i++) {
+        digestBytes[i] = parseInt(clean.substr(i * 2, 2), 16);
+      }
+    }
 
     // 2. Compute authentic IPFS CIDv1
-    const standardCid = computeIpfsCidV1(hashBuffer);
+    const standardCid = computeIpfsCidV1(digestBytes);
 
     // Cache local blob URL
+    let localBlobUrl = null;
     try {
-      const blobUrl = URL.createObjectURL(file);
-      this.blobCache.set(standardCid, blobUrl);
+      if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+        localBlobUrl = URL.createObjectURL(file);
+        this.blobCache.set(standardCid, localBlobUrl);
+        this.blobCache.set(`ipfs://${standardCid}`, localBlobUrl);
+      }
     } catch {}
 
     const jwt = this.getPinataJwt();
@@ -196,6 +252,10 @@ class IpfsService {
         if (response.ok) {
           const result = await response.json();
           const liveCid = result.IpfsHash || standardCid;
+          if (localBlobUrl) {
+            this.blobCache.set(liveCid, localBlobUrl);
+            this.blobCache.set(`ipfs://${liveCid}`, localBlobUrl);
+          }
           return {
             success: true,
             cid: liveCid,
@@ -204,6 +264,7 @@ class IpfsService {
             isPinnedLive: true,
             provider: 'Pinata Cloud (Decentralized IPFS)',
             gatewayUrl: this.getGatewayUrl(liveCid),
+            localPreviewUrl: localBlobUrl,
             pinSize: result.PinSize || file.size,
           };
         } else {
@@ -223,6 +284,7 @@ class IpfsService {
       isPinnedLive: false,
       provider: 'IPFS Content Addressing (CIDv1)',
       gatewayUrl: this.getGatewayUrl(standardCid),
+      localPreviewUrl: localBlobUrl,
       pinSize: file.size,
     };
   }

@@ -144,6 +144,31 @@ function IpfsModalContent({ onClose, onConfigSaved }) {
                 onChange={e => setGateway(e.target.value)}
                 style={{ fontSize: '12px' }}
               />
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                {[
+                  { label: 'ipfs.io (Default)', url: 'https://ipfs.io/ipfs/' },
+                  { label: 'dweb.link (Protocol Labs)', url: 'https://dweb.link/ipfs/' },
+                  { label: 'cloudflare-ipfs.com', url: 'https://cloudflare-ipfs.com/ipfs/' },
+                  { label: 'gateway.pinata.cloud', url: 'https://gateway.pinata.cloud/ipfs/' },
+                ].map(gw => (
+                  <button
+                    key={gw.url}
+                    type="button"
+                    onClick={() => setGateway(gw.url)}
+                    className="badge badge-neutral"
+                    style={{
+                      cursor: 'pointer',
+                      border: gateway === gw.url ? '1px solid var(--color-primary)' : '1px solid var(--border-subtle)',
+                      background: gateway === gw.url ? 'rgba(0, 82, 255, 0.12)' : 'var(--bg-canvas)',
+                      color: gateway === gw.url ? 'var(--color-primary-light)' : 'var(--text-dim)',
+                      fontSize: '11px',
+                      padding: '3px 8px'
+                    }}
+                  >
+                    {gw.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>

@@ -35,7 +35,8 @@ import {
   BellRing,
   CheckCircle2,
   XCircle,
-  ExternalLink
+  ExternalLink,
+  Eye
 } from 'lucide-react';
 import { blockchainService } from './services/blockchainState';
 import { authService } from './services/authService';
@@ -385,9 +386,17 @@ export default function App() {
     addToast('Dispute Raised', `Expense #${expId} flagged for arbitration. Ledger effect frozen.`, 'info');
   };
 
-  const handleConfirmResolve = (expId, accept, notes) => {
-    blockchainService.resolveDispute(currentGroup.id, expId, accept, notes);
-    addToast('Dispute Arbitrated', `Administrator resolved Expense #${expId}: ${accept ? 'APPROVED' : 'REJECTED'}`, 'success');
+  const handleConfirmResolve = (expId, acceptOrSplitData, notes) => {
+    blockchainService.resolveDispute(currentGroup.id, expId, acceptOrSplitData, notes);
+    const isAdjusted = typeof acceptOrSplitData === 'object' && acceptOrSplitData !== null;
+    const isAccepted = acceptOrSplitData === true || isAdjusted;
+    addToast(
+      isAdjusted ? 'Dispute Resolved with Adjusted Split' : 'Dispute Arbitrated',
+      isAdjusted 
+        ? `Administrator arbitrated Expense #${expId} with corrected percentages and participant allocations`
+        : `Administrator resolved Expense #${expId}: ${isAccepted ? 'APPROVED' : 'REJECTED'}`,
+      'success'
+    );
   };
 
   const handleConfirmCorrection = (groupId, oldExpId, newExpenseData, reason) => {
@@ -784,6 +793,8 @@ export default function App() {
           onClose={() => setDisputeModalData(null)}
           expense={disputeModalData.expense}
           isResolving={disputeModalData.isResolving}
+          currentGroup={currentGroup}
+          currentAccount={currentAccount}
           onConfirmDispute={handleConfirmDispute}
           onConfirmResolve={handleConfirmResolve}
         />
@@ -837,27 +848,48 @@ export default function App() {
               </div>
 
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px', flexWrap: 'wrap', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', flexWrap: 'wrap', gap: '6px' }}>
                   <span style={{ color: 'var(--text-dim)' }}>InterPlanetary File System (IPFS) CID:</span>
-                  {inspectReceiptData.ipfsCid && (
-                    <a
-                      href={inspectReceiptData.ipfsGatewayUrl || ipfsService.getGatewayUrl(inspectReceiptData.ipfsCid)}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        color: '#0052FF',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '3px',
-                        textDecoration: 'none'
-                      }}
-                    >
-                      <span>Open on IPFS Gateway</span>
-                      <ExternalLink size={11} />
-                    </a>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {ipfsService.getLocalPreviewUrl(inspectReceiptData.ipfsCid) && (
+                      <a
+                        href={ipfsService.getLocalPreviewUrl(inspectReceiptData.ipfsCid)}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          color: 'var(--color-emerald-light)',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <Eye size={12} />
+                        <span>View Cached Document</span>
+                      </a>
+                    )}
+                    {inspectReceiptData.ipfsCid && (
+                      <a
+                        href={inspectReceiptData.ipfsGatewayUrl || ipfsService.getGatewayUrl(inspectReceiptData.ipfsCid)}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          color: '#0052FF',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <span>Open on IPFS Gateway</span>
+                        <ExternalLink size={11} />
+                      </a>
+                    )}
+                  </div>
                 </div>
                 <span className="mono" style={{ color: 'var(--text-main)', wordBreak: 'break-all', background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)', padding: '6px 10px', borderRadius: '4px', display: 'block' }}>
                   {inspectReceiptData.ipfsCid}
@@ -865,6 +897,16 @@ export default function App() {
                 {inspectReceiptData.isPinnedLive && (
                   <div style={{ marginTop: '4px', fontSize: '11px', color: '#166534', fontWeight: 600 }}>
                     ⚡ Pinned live on Pinata Cloud IPFS Cluster
+                  </div>
+                )}
+                {ipfsService.getLocalPreviewUrl(inspectReceiptData.ipfsCid) && 
+                 /\.(png|jpe?g|webp|gif)$/i.test(inspectReceiptData.receiptFileName || '') && (
+                  <div style={{ marginTop: '10px', textAlign: 'center', background: 'var(--bg-canvas)', borderRadius: '6px', padding: '8px', border: '1px solid var(--border-subtle)' }}>
+                    <img
+                      src={ipfsService.getLocalPreviewUrl(inspectReceiptData.ipfsCid)}
+                      alt="Receipt Document Preview"
+                      style={{ maxHeight: '180px', maxWidth: '100%', borderRadius: '4px', objectFit: 'contain' }}
+                    />
                   </div>
                 )}
               </div>

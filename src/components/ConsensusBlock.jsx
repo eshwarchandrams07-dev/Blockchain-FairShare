@@ -174,6 +174,13 @@ export default function ConsensusBlock({
         </div>
       )}
 
+      {expense.disputeResolution && (
+        <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: 'var(--color-emerald-light)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <ShieldCheck size={16} style={{ color: 'var(--color-emerald)', flexShrink: 0 }} />
+          <span><strong>Arbitration Completed:</strong> {expense.disputeResolution.action === 'ADJUSTED_SPLIT' ? 'Split adjusted and finalized by administrator' : 'Original claim upheld'}. Note: "{expense.disputeResolution.notes}"</span>
+        </div>
+      )}
+
       {/* Expandable Cryptographic Details */}
       {showCryptoDetails && (
         <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px 14px', marginBottom: '14px', fontSize: '11px' }}>

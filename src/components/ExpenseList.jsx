@@ -363,12 +363,21 @@ export default function ExpenseList({
               <div className="expense-shares-list">
                 {(exp.shares || []).map(s => {
                   const isCurrent = Boolean(s?.participant && currentAccount && s.participant.toLowerCase() === currentAccount.toLowerCase());
+                  const pctStr = s.percentage !== undefined 
+                    ? `${Number(s.percentage).toFixed(1)}%` 
+                    : (exp.totalAmount > 0 ? `${((s.amount / exp.totalAmount) * 100).toFixed(1)}%` : '0%');
+
                   return (
                     <div key={s.participant} className="share-item">
                       <span className="share-participant">
                         {s.name} {isCurrent && '(You)'}
                       </span>
-                      <span className="share-amount mono">{formatCents(s.amount)}</span>
+                      <span className="share-amount mono">
+                        {formatCents(s.amount)}
+                        <span style={{ fontSize: '11px', color: 'var(--text-dim)', marginLeft: '4px' }}>
+                          ({pctStr})
+                        </span>
+                      </span>
                     </div>
                   );
                 })}
@@ -394,6 +403,16 @@ export default function ExpenseList({
                   <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
                     Balance effect suspended until admin resolves.
                   </p>
+                </div>
+              )}
+
+              {/* Dispute Resolution Note */}
+              {exp.disputeResolution && (
+                <div style={{ background: 'var(--bg-surface-elevated)', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: 'var(--radius-md)', padding: '10px 14px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--color-emerald-light)', fontWeight: 600 }}>
+                    ⚖️ <strong>Arbitration Resolved:</strong> {exp.disputeResolution.action === 'ADJUSTED_SPLIT' ? 'Admin adjusted participant split and reallocated shares.' : 'Admin arbitrated and upheld claim.'}
+                    {exp.disputeResolution.notes && <span style={{ color: 'var(--text-main)', fontWeight: 400 }}> "{exp.disputeResolution.notes}"</span>}
+                  </div>
                 </div>
               )}
 

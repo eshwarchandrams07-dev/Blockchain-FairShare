@@ -1,8 +1,8 @@
 import { ethers } from 'ethers';
-import { generateTxHash } from '../utils/cryptoUtils';
-import { liveSync, playChimeSound } from './liveSyncService';
-import { authService, deriveWalletFromEmail } from './authService';
-import deploymentsData from '../contracts/deployments.json';
+import { generateTxHash } from '../utils/cryptoUtils.js';
+import { liveSync, playChimeSound } from './liveSyncService.js';
+import { authService, deriveWalletFromEmail } from './authService.js';
+import deploymentsData from '../contracts/deployments.json' with { type: 'json' };
 
 export const APPROVAL_POLICIES = {
   AUTO_APPROVE: 0,
@@ -250,6 +250,12 @@ class BlockchainStateService {
       });
     }
 
+    // If there are verified Google members but none has role 'ADMIN', ensure the first joined Google user is ADMIN
+    if (clean.length > 0 && !clean.some(m => m.role === 'ADMIN')) {
+      clean[0].role = 'ADMIN';
+      clean[0].avatar = '👑';
+    }
+
     return clean;
   }
 
@@ -265,9 +271,11 @@ class BlockchainStateService {
     // Strictly sanitize and purge any demo/non-Google users
     publicGroup.members = this.sanitizeGoogleMembers(publicGroup.members);
 
+    // Strictly require authenticated Google account - do not allow random non-Google device profiles
     const myAddr = (this.myProfile?.address || '').toLowerCase();
     const myEmail = (this.myProfile?.email || '').toLowerCase();
-    if (!myAddr || !myEmail) return;
+    const myProvider = this.myProfile?.provider;
+    if (!myAddr || !myEmail || !myEmail.includes('@') || myProvider !== 'google') return;
 
     const existing = publicGroup.members.find(m => 
       (m.address && m.address.toLowerCase() === myAddr) ||
@@ -275,13 +283,14 @@ class BlockchainStateService {
     );
 
     if (!existing) {
-      const isFirst = publicGroup.members.length === 0;
+      const hasAdmin = publicGroup.members.some(m => m.role === 'ADMIN');
+      const isFirst = publicGroup.members.length === 0 || !hasAdmin;
       const newMember = {
         address: this.myProfile.address,
         name: this.myProfile.name,
         email: this.myProfile.email,
         role: isFirst ? 'ADMIN' : 'MEMBER',
-        avatar: this.myProfile.avatar || '👑',
+        avatar: isFirst ? '👑' : (this.myProfile.avatar || '👤'),
         pin: this.myProfile.pin || '1234',
         upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
         tokenBalance: this.myProfile.tokenBalance || 75000,
@@ -289,12 +298,21 @@ class BlockchainStateService {
         joinedAt: Date.now(),
       };
       publicGroup.members.push(newMember);
+      if (isFirst) {
+        publicGroup.creator = newMember.address;
+      }
       this.saveState(true);
     } else {
+      if (!publicGroup.members.some(m => m.role === 'ADMIN')) {
+        existing.role = 'ADMIN';
+        existing.avatar = '👑';
+        publicGroup.creator = existing.address;
+      }
       if (this.myProfile.name && existing.name !== this.myProfile.name) existing.name = this.myProfile.name;
       if (this.myProfile.avatar && existing.avatar !== this.myProfile.avatar) existing.avatar = this.myProfile.avatar;
       if (this.myProfile.email && existing.email !== this.myProfile.email) existing.email = this.myProfile.email;
       if (this.myProfile.address && existing.address !== this.myProfile.address) existing.address = this.myProfile.address;
+      this.saveState(true);
     }
   }
 
@@ -536,6 +554,10 @@ class BlockchainStateService {
 
   loadState() {
     try {
+      if (typeof localStorage === 'undefined') {
+        this.resetToDefaults();
+        return;
+      }
       const stored = localStorage.getItem(this.storageKey);
       if (stored) {
         const parsed = JSON.parse(stored);
@@ -558,7 +580,7 @@ class BlockchainStateService {
             inviteCode: 'PUBLIC',
             currency: '₹',
             description: 'Decentralized public expense ledger. Open for verified Google users and multi-device settlement.',
-            creator: this.myProfile?.address || '0x0000000000000000000000000000000000000000',
+            creator: '0x0000000000000000000000000000000000000000',
             createdAt: Date.now(),
             approvalPolicy: APPROVAL_POLICIES.MAJORITY_VOTE,
             members: [],
@@ -581,6 +603,13 @@ class BlockchainStateService {
           // Sanitize members of all groups to only genuine Google accounts
           if (Array.isArray(g.members)) {
             g.members = this.sanitizeGoogleMembers(g.members);
+            if (g.members.length > 0 && !g.members.some(m => m.role === 'ADMIN')) {
+              g.members[0].role = 'ADMIN';
+              g.members[0].avatar = '👑';
+              g.creator = g.members[0].address;
+            } else if (g.members.length === 0 && Number(g.id) === 1) {
+              g.creator = '0x0000000000000000000000000000000000000000';
+            }
           } else {
             g.members = [];
           }
@@ -659,18 +688,26 @@ class BlockchainStateService {
     if (!Array.isArray(activeGroup.members)) activeGroup.members = [];
     const myAddr = (this.myProfile?.address || '').toLowerCase();
     const myEmail = (this.myProfile?.email || '').toLowerCase();
-    if (!myAddr || !myEmail || !myEmail.includes('@')) return null;
+    const myProvider = this.myProfile?.provider;
+
+    // Strictly enforce genuine Google account
+    if (!myAddr || !myEmail || !myEmail.includes('@') || myProvider !== 'google') return null;
+
+    activeGroup.members = this.sanitizeGoogleMembers(activeGroup.members);
+
     const exists = activeGroup.members.some(
       m => (m && m.address && m.address.toLowerCase() === myAddr) ||
            (m && m.email && m.email.toLowerCase() === myEmail)
     );
     if (!exists) {
+      const hasAdmin = activeGroup.members.some(m => m.role === 'ADMIN');
+      const isFirst = activeGroup.members.length === 0 || !hasAdmin;
       const newMember = {
         address: this.myProfile.address,
         name: this.myProfile.name,
         email: this.myProfile.email,
-        role: activeGroup.members.length === 0 ? 'ADMIN' : 'MEMBER',
-        avatar: this.myProfile.avatar || '👑',
+        role: isFirst ? 'ADMIN' : 'MEMBER',
+        avatar: isFirst ? '👑' : (this.myProfile.avatar || '👤'),
         pin: this.myProfile.pin || '1234',
         upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
         tokenBalance: this.myProfile.tokenBalance || 75000,
@@ -678,6 +715,9 @@ class BlockchainStateService {
         joinedAt: Date.now(),
       };
       activeGroup.members.push(newMember);
+      if (isFirst) {
+        activeGroup.creator = newMember.address;
+      }
       activeGroup.members = this.sanitizeGoogleMembers(activeGroup.members);
       this.saveState();
       liveSync.broadcast({
@@ -704,7 +744,9 @@ class BlockchainStateService {
         currentGroupId: this.currentGroupId,
         currentBlockNumber: this.currentBlockNumber,
       };
-      localStorage.setItem(this.storageKey, JSON.stringify(state));
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(this.storageKey, JSON.stringify(state));
+      }
       this.notifyListeners();
 
       if (!skipBroadcast) {
@@ -747,6 +789,14 @@ class BlockchainStateService {
   }
 
   resetToDefaults() {
+    const isGoogleUser = Boolean(
+      this.myProfile &&
+      this.myProfile.address &&
+      this.myProfile.email &&
+      this.myProfile.email.includes('@') &&
+      this.myProfile.provider === 'google'
+    );
+
     this.groups = [
       {
         id: 1,
@@ -757,17 +807,19 @@ class BlockchainStateService {
         inviteCode: "PUBLIC",
         currency: "₹",
         description: "Decentralized public expense ledger. Open for community expense sharing and multi-device settlement.",
-        creator: this.myProfile?.address || "0x0000000000000000000000000000000000000000",
+        creator: isGoogleUser ? this.myProfile.address : "0x0000000000000000000000000000000000000000",
         createdAt: Date.now(),
         approvalPolicy: APPROVAL_POLICIES.MAJORITY_VOTE,
-        members: this.myProfile && this.myProfile.address ? [{
+        members: isGoogleUser ? [{
           address: this.myProfile.address,
           name: this.myProfile.name,
+          email: this.myProfile.email,
           role: 'ADMIN',
-          avatar: this.myProfile.avatar,
-          pin: this.myProfile.pin,
+          avatar: this.myProfile.avatar || '👑',
+          pin: this.myProfile.pin || '1234',
           upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-          tokenBalance: this.myProfile.tokenBalance || 50000,
+          tokenBalance: this.myProfile.tokenBalance || 75000,
+          provider: 'google',
           joinedAt: Date.now(),
         }] : [],
       }
@@ -1522,20 +1574,24 @@ class BlockchainStateService {
     if (!Array.isArray(grp.members)) grp.members = [];
     const myAddr = (this.myProfile?.address || '').toLowerCase();
     const myEmail = (this.myProfile?.email || '').toLowerCase();
-    if (!myAddr || !myEmail || !myEmail.includes('@')) return;
+    const myProvider = this.myProfile?.provider;
+    if (!myAddr || !myEmail || !myEmail.includes('@') || myProvider !== 'google') return;
+
+    grp.members = this.sanitizeGoogleMembers(grp.members);
 
     const exists = grp.members.some(
       m => (m && m.address && m.address.toLowerCase() === myAddr) ||
            (m && m.email && m.email.toLowerCase() === myEmail)
     );
     if (!exists) {
-      const isFirst = grp.members.length === 0;
+      const hasAdmin = grp.members.some(m => m.role === 'ADMIN');
+      const isFirst = grp.members.length === 0 || !hasAdmin;
       const newMember = {
         address: this.myProfile.address,
         name: this.myProfile.name,
         email: this.myProfile.email,
         role: isFirst ? 'ADMIN' : 'MEMBER',
-        avatar: this.myProfile.avatar || '👑',
+        avatar: isFirst ? '👑' : (this.myProfile.avatar || '👤'),
         pin: this.myProfile.pin || '1234',
         upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
         tokenBalance: this.myProfile.tokenBalance ?? 75000,
@@ -1543,6 +1599,9 @@ class BlockchainStateService {
         joinedAt: Date.now(),
       };
       grp.members.push(newMember);
+      if (isFirst) {
+        grp.creator = newMember.address;
+      }
       grp.members = this.sanitizeGoogleMembers(grp.members);
 
       liveSync.broadcast({
@@ -2031,8 +2090,19 @@ class BlockchainStateService {
       throw new Error('Only a group administrator can arbitrate disputes');
     }
 
+    if (typeof acceptExpense === 'object' && acceptExpense !== null) {
+      return this.resolveDisputeWithSplit(groupId, expenseId, acceptExpense, resolutionNotes);
+    }
+
     if (acceptExpense) {
       exp.status = EXPENSE_STATUS.APPROVED;
+      exp.disputeResolution = {
+        resolvedBy: this.currentAccount,
+        resolverName: this.getMyProfile().name,
+        resolvedAt: Date.now(),
+        action: 'UPHELD',
+        notes: resolutionNotes || 'Original claim and split upheld by administrator.',
+      };
       this.addAuditLog(
         groupId,
         'DISPUTE_RESOLVED',
@@ -2042,6 +2112,13 @@ class BlockchainStateService {
       );
     } else {
       exp.status = EXPENSE_STATUS.REJECTED;
+      exp.disputeResolution = {
+        resolvedBy: this.currentAccount,
+        resolverName: this.getMyProfile().name,
+        resolvedAt: Date.now(),
+        action: 'REJECTED',
+        notes: resolutionNotes || 'Expense rejected by administrator.',
+      };
       this.addAuditLog(
         groupId,
         'DISPUTE_RESOLVED',
@@ -2050,6 +2127,52 @@ class BlockchainStateService {
         `Admin resolved dispute on Expense #${expenseId} as REJECTED. Note: "${resolutionNotes}"`
       );
     }
+
+    this.saveState();
+    return exp;
+  }
+
+  resolveDisputeWithSplit(groupId, expenseId, splitData, resolutionNotes) {
+    const exp = this.expenses.find(e => e.id === expenseId && e.groupId === groupId);
+    if (!exp) throw new Error('Expense not found');
+
+    const group = this.groups.find(g => g.id === groupId);
+    const callerMember = group.members.find(m => m.address.toLowerCase() === this.currentAccount.toLowerCase());
+    if (callerMember?.role !== 'ADMIN') {
+      throw new Error('Only a group administrator can arbitrate disputes');
+    }
+
+    const { shares, splitType, totalAmount } = splitData;
+    if (!shares || !Array.isArray(shares) || shares.length === 0) {
+      throw new Error('At least one participant must be included in the adjusted split');
+    }
+
+    if (totalAmount !== undefined && !isNaN(Number(totalAmount)) && Number(totalAmount) > 0) {
+      exp.totalAmount = Number(totalAmount);
+    }
+    if (splitType !== undefined) {
+      exp.splitType = Number(splitType);
+    }
+    exp.shares = shares;
+    exp.status = EXPENSE_STATUS.APPROVED;
+    if (!exp.approvals.includes(this.currentAccount)) {
+      exp.approvals.push(this.currentAccount);
+    }
+    exp.disputeResolution = {
+      resolvedBy: this.currentAccount,
+      resolverName: this.getMyProfile().name,
+      resolvedAt: Date.now(),
+      action: 'ADJUSTED_SPLIT',
+      notes: resolutionNotes || 'Split percentages and participant allocations adjusted by administrator.',
+    };
+
+    this.addAuditLog(
+      groupId,
+      'DISPUTE_RESOLVED',
+      this.currentAccount,
+      this.getMyProfile().name,
+      `Admin arbitrated Expense #${expenseId} with adjusted split: ${shares.length} participants allocated. Note: "${resolutionNotes || 'Adjusted shares'}"`
+    );
 
     this.saveState();
     return exp;

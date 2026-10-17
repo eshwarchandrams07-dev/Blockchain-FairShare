@@ -139,6 +139,13 @@ function sanitizeGoogleMembers(members) {
       provider: 'google',
     });
   }
+
+  // If there are verified Google members but none has role 'ADMIN', ensure the first joined Google user is ADMIN
+  if (clean.length > 0 && !clean.some(m => m.role === 'ADMIN')) {
+    clean[0].role = 'ADMIN';
+    clean[0].avatar = '👑';
+  }
+
   return clean;
 }
 

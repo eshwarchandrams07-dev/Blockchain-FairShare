@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { computeIpfsCidV1 } from '../services/ipfsService.js';
 
 /**
  * Format address to short readable string: 0x1234...abcd
@@ -80,14 +81,24 @@ export function isPlaceholderUpi(upiId) {
 export async function computeFileHash(file) {
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
+    if (typeof crypto !== 'undefined' && crypto.subtle && typeof crypto.subtle.digest === 'function') {
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      return hashHex;
+    }
+    // Fallback using ethers pure-JS sha256
+    return ethers.sha256(new Uint8Array(arrayBuffer));
   } catch (err) {
     console.error('Error computing file hash:', err);
+    try {
+      if (file && typeof file.arrayBuffer === 'function') {
+        const buf = await file.arrayBuffer();
+        return ethers.sha256(new Uint8Array(buf));
+      }
+    } catch {}
     // Fallback pseudo-hash
-    return ethers.keccak256(ethers.toUtf8Bytes(file.name + file.size + file.lastModified));
+    return ethers.keccak256(ethers.toUtf8Bytes(file.name + file.size + (file.lastModified || '0')));
   }
 }
 
@@ -96,8 +107,13 @@ export async function computeFileHash(file) {
  */
 export function generateIpfsCid(hashHex) {
   if (!hashHex) return 'ipfs://bafkreiaaaaaaaafairshare';
-  const raw = hashHex.replace('0x', '').toLowerCase();
-  return `ipfs://bafkrei${raw.substring(0, 32)}fairshare`;
+  try {
+    const cid = computeIpfsCidV1(hashHex);
+    return `ipfs://${cid}`;
+  } catch {
+    const raw = hashHex.replace('0x', '').toLowerCase();
+    return `ipfs://bafkrei${raw.substring(0, 32)}fairshare`;
+  }
 }
 
 /**
