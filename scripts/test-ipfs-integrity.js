@@ -88,10 +88,10 @@ assert(fallbackUri.startsWith('ipfs://bafkrei'), 'generateIpfsCid handles empty 
 console.log('\n--- 3. Public Gateway Resolution ---');
 
 const defaultGatewayUrl = ipfsService.getGatewayUrl(cidFromBuffer);
-assert(defaultGatewayUrl === `https://ipfs.io/ipfs/${cidFromBuffer}`, 'Resolves default ipfs.io gateway URL');
+assert(defaultGatewayUrl === `/ipfs/${cidFromBuffer}`, 'Resolves default /ipfs/ gateway URL');
 
 const uriGatewayUrl = ipfsService.getGatewayUrl(`ipfs://${cidFromBuffer}`);
-assert(uriGatewayUrl === `https://ipfs.io/ipfs/${cidFromBuffer}`, 'Strips ipfs:// protocol prefix cleanly');
+assert(uriGatewayUrl === `/ipfs/${cidFromBuffer}`, 'Strips ipfs:// protocol prefix cleanly');
 
 ipfsService.setGateway('https://cloudflare-ipfs.com/ipfs');
 assert(ipfsService.getGateway() === 'https://cloudflare-ipfs.com/ipfs/', 'Appends trailing slash to custom gateway');

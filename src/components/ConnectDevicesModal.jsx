@@ -16,6 +16,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { fetchDetectedLanIp, saveLanIp, getEffectiveHost, getSavedLanIp } from '../utils/networkUtils';
+import QrCodeDisplay from './QrCodeDisplay';
 
 export default function ConnectDevicesModal({
   isOpen,
@@ -82,8 +83,6 @@ export default function ConnectDevicesModal({
     // 1-Tap quick mode: embeds both ID and Password
     mobileJoinUrl = `${protocol}//${effectiveHost}/?joinGroup=${groupId}&ledgerId=${encodeURIComponent(ledgerId)}&key=${encodeURIComponent(password)}`;
   }
-
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(mobileJoinUrl)}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(mobileJoinUrl);
@@ -286,15 +285,10 @@ export default function ConnectDevicesModal({
               display: 'inline-block'
             }}
           >
-            <img 
-              src={qrCodeUrl}
+            <QrCodeDisplay 
+              data={mobileJoinUrl}
+              size={180}
               alt="Scan to join group ledger"
-              style={{
-                width: '180px',
-                height: '180px',
-                display: 'block',
-                borderRadius: '8px'
-              }}
             />
           </div>
 

@@ -23,6 +23,7 @@ import { shortenAddress, formatCents } from '../utils/cryptoUtils';
 import { APPROVAL_POLICIES, POLICY_LABELS } from '../services/blockchainState';
 import { fetchDetectedLanIp, getEffectiveHost } from '../utils/networkUtils';
 import CreateGroupModal from './CreateGroupModal';
+import QrCodeDisplay from './QrCodeDisplay';
 
 export default function GroupManagement({
   groups,
@@ -64,6 +65,14 @@ export default function GroupManagement({
     return () => window.removeEventListener('fairshare_lan_ip_changed', handleIpChanged);
   }, []);
 
+  if (!currentGroup) {
+    return (
+      <div className="glass-panel" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ color: 'var(--text-muted)' }}>No group selected or ledger loading...</p>
+      </div>
+    );
+  }
+
   const verifiedMembers = (currentGroup?.members || []).filter(m => m && m.address && m.email && m.email.includes('@'));
   const currentMember = verifiedMembers.find(m => currentAccount && m.address.toLowerCase() === currentAccount.toLowerCase());
   const isAdmin = currentMember?.role === 'ADMIN' || verifiedMembers.length <= 1;
@@ -79,8 +88,6 @@ export default function GroupManagement({
   const inviteUrl = isGroupPrivate
     ? `${protocol}//${effectiveHost}/?joinGroup=${currentGroup.id}&ledgerId=${encodeURIComponent(currentLedgerId)}&key=${encodeURIComponent(currentPassword)}`
     : `${protocol}//${effectiveHost}/?joinGroup=${currentGroup.id}`;
-
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data=${encodeURIComponent(inviteUrl)}`;
 
   const handleCopy = (addr) => {
     navigator.clipboard.writeText(addr);
@@ -554,10 +561,10 @@ export default function GroupManagement({
                   onClick={() => { setIsAddMemberModalOpen(false); setIsQrModalOpen(true); }}
                   title="Click to enlarge QR Code"
                 >
-                  <img 
-                    src={qrCodeUrl} 
+                  <QrCodeDisplay 
+                    data={inviteUrl} 
+                    size={80} 
                     alt="Scan QR Code to join ledger" 
-                    style={{ width: '80px', height: '80px', display: 'block', borderRadius: '4px' }} 
                   />
                 </div>
 
@@ -745,15 +752,10 @@ export default function GroupManagement({
                   display: 'inline-block'
                 }}
               >
-                <img 
-                  src={qrCodeUrl}
+                <QrCodeDisplay 
+                  data={inviteUrl}
+                  size={200}
                   alt={`QR Code to join ${currentGroup.name}`}
-                  style={{
-                    width: '200px',
-                    height: '200px',
-                    display: 'block',
-                    borderRadius: '8px'
-                  }}
                 />
               </div>
 

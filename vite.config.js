@@ -10,6 +10,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const DATA_DIR = path.join(__dirname, 'data')
 const DB_FILE = path.join(DATA_DIR, 'fairshare_ledger_db.json')
+const RECEIPTS_DIR = path.join(DATA_DIR, 'receipts')
 
 function getLocalLanIp() {
   const nets = os.networkInterfaces()
@@ -42,6 +43,9 @@ let cachedLedgerState = null
 try {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true })
+  }
+  if (!fs.existsSync(RECEIPTS_DIR)) {
+    fs.mkdirSync(RECEIPTS_DIR, { recursive: true })
   }
   if (fs.existsSync(DB_FILE)) {
     const raw = fs.readFileSync(DB_FILE, 'utf-8')
@@ -341,6 +345,122 @@ function handleStateEndpoint(req, res) {
   }
 }
 
+function handleUploadReceiptEndpoint(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204
+    res.end()
+    return
+  }
+
+  if (req.method === 'POST') {
+    let body = ''
+    req.on('data', chunk => { body += chunk })
+    req.on('end', () => {
+      try {
+        const parsed = JSON.parse(body)
+        const { cid, fileName, dataUrl } = parsed
+        if (cid && dataUrl) {
+          const cleanCid = cid.replace(/[^a-zA-Z0-9]/g, '')
+          const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+          if (match) {
+            const mimeType = match[1]
+            const buffer = Buffer.from(match[2], 'base64')
+            fs.writeFileSync(path.join(RECEIPTS_DIR, cleanCid), buffer)
+            fs.writeFileSync(
+              path.join(RECEIPTS_DIR, `${cleanCid}.meta.json`),
+              JSON.stringify({ fileName, mimeType, timestamp: Date.now() }, null, 2)
+            )
+          }
+        }
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ success: true }))
+      } catch (err) {
+        res.statusCode = 400
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ success: false, error: err.message }))
+      }
+    })
+  } else {
+    res.statusCode = 405
+    res.end()
+  }
+}
+
+function handleGetReceiptEndpoint(req, res, next) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204
+    res.end()
+    return
+  }
+
+  const rawCid = (req.url || '').replace(/^\//, '').split('?')[0]
+  if (!rawCid) {
+    if (typeof next === 'function') return next()
+    res.statusCode = 404
+    res.end()
+    return
+  }
+
+  const cleanCid = rawCid.replace(/[^a-zA-Z0-9]/g, '')
+  const receiptPath = path.join(RECEIPTS_DIR, cleanCid)
+  const metaPath = path.join(RECEIPTS_DIR, `${cleanCid}.meta.json`)
+
+  if (!fs.existsSync(receiptPath) && cachedLedgerState && Array.isArray(cachedLedgerState.expenses)) {
+    const matchingExp = cachedLedgerState.expenses.find(e => 
+      e && (e.ipfsCid || '').replace('ipfs://', '').trim() === cleanCid && e.receiptDataUrl
+    );
+    if (matchingExp && matchingExp.receiptDataUrl) {
+      try {
+        const match = matchingExp.receiptDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          const mimeType = match[1];
+          const buffer = Buffer.from(match[2], 'base64');
+          fs.writeFileSync(receiptPath, buffer);
+          fs.writeFileSync(
+            metaPath,
+            JSON.stringify({ fileName: matchingExp.receiptFileName || 'receipt.pdf', mimeType, timestamp: Date.now() }, null, 2)
+          );
+        }
+      } catch {}
+    }
+  }
+
+  if (fs.existsSync(receiptPath)) {
+    let mimeType = 'application/octet-stream'
+    if (fs.existsSync(metaPath)) {
+      try {
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'))
+        if (meta.mimeType) mimeType = meta.mimeType
+      } catch {}
+    } else {
+      const head = fs.readFileSync(receiptPath, { flag: 'r' }).subarray(0, 8)
+      if (head.includes(Buffer.from('%PDF'))) mimeType = 'application/pdf'
+      else if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) mimeType = 'image/png'
+      else if (head[0] === 0xff && head[1] === 0xd8) mimeType = 'image/jpeg'
+    }
+
+    res.statusCode = 200
+    res.setHeader('Content-Type', mimeType)
+    res.setHeader('Content-Disposition', 'inline')
+    res.setHeader('Cache-Control', 'public, max-age=31536000')
+    res.setHeader('X-Ipfs-Path', `/ipfs/${cleanCid}`)
+    res.setHeader('X-Ipfs-Roots', cleanCid)
+    res.setHeader('Access-Control-Expose-Headers', 'X-Ipfs-Path, X-Ipfs-Roots')
+    fs.createReadStream(receiptPath).pipe(res)
+  } else {
+    res.statusCode = 404
+    res.setHeader('Content-Type', 'application/json')
+    res.end(JSON.stringify({ error: 'Receipt not found on IPFS' }))
+  }
+}
+
 function fairShareSyncPlugin() {
   return {
     name: 'fairshare-sync-relay',
@@ -352,6 +472,9 @@ function fairShareSyncPlugin() {
         res.end(JSON.stringify({ ip: getLocalLanIp() }))
       })
       server.middlewares.use('/api/ledger-state', handleStateEndpoint)
+      server.middlewares.use('/api/upload-receipt', handleUploadReceiptEndpoint)
+      server.middlewares.use('/api/receipts', handleGetReceiptEndpoint)
+      server.middlewares.use('/ipfs', handleGetReceiptEndpoint)
     },
     configurePreviewServer(server) {
       setupWebSocketRelay(server)
@@ -361,6 +484,9 @@ function fairShareSyncPlugin() {
         res.end(JSON.stringify({ ip: getLocalLanIp() }))
       })
       server.middlewares.use('/api/ledger-state', handleStateEndpoint)
+      server.middlewares.use('/api/upload-receipt', handleUploadReceiptEndpoint)
+      server.middlewares.use('/api/receipts', handleGetReceiptEndpoint)
+      server.middlewares.use('/ipfs', handleGetReceiptEndpoint)
     },
   }
 }

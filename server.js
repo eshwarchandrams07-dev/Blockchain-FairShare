@@ -52,6 +52,7 @@ const MIME_TYPES = {
 
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'fairshare_ledger_db.json');
+const RECEIPTS_DIR = path.join(DATA_DIR, 'receipts');
 
 let cachedLedgerState = null;
 
@@ -59,6 +60,9 @@ let cachedLedgerState = null;
 try {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(RECEIPTS_DIR)) {
+    fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
   }
   if (fs.existsSync(DB_FILE)) {
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
@@ -302,6 +306,98 @@ const server = http.createServer((req, res) => {
           res.end('Invalid JSON');
         }
       });
+      return;
+    }
+  }
+
+  if (reqPath === '/api/upload-receipt') {
+    if (req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body);
+          const { cid, fileName, dataUrl } = parsed;
+          if (cid && dataUrl) {
+            const cleanCid = cid.replace(/[^a-zA-Z0-9]/g, '');
+            const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+            if (match) {
+              const mimeType = match[1];
+              const buffer = Buffer.from(match[2], 'base64');
+              fs.writeFileSync(path.join(RECEIPTS_DIR, cleanCid), buffer);
+              fs.writeFileSync(
+                path.join(RECEIPTS_DIR, `${cleanCid}.meta.json`),
+                JSON.stringify({ fileName, mimeType, timestamp: Date.now() }, null, 2)
+              );
+            }
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true }));
+        } catch (err) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: err.message }));
+        }
+      });
+      return;
+    }
+  }
+
+  if (reqPath.startsWith('/api/receipts/') || reqPath.startsWith('/ipfs/')) {
+    const rawCid = reqPath.startsWith('/api/receipts/') 
+      ? reqPath.replace('/api/receipts/', '').split('?')[0]
+      : reqPath.replace('/ipfs/', '').split('?')[0];
+    const cleanCid = rawCid.replace(/[^a-zA-Z0-9]/g, '');
+    const receiptPath = path.join(RECEIPTS_DIR, cleanCid);
+    const metaPath = path.join(RECEIPTS_DIR, `${cleanCid}.meta.json`);
+
+    // Auto-reconstruct from ledger database if file on disk was missing
+    if (!fs.existsSync(receiptPath) && cachedLedgerState && Array.isArray(cachedLedgerState.expenses)) {
+      const matchingExp = cachedLedgerState.expenses.find(e => 
+        e && (e.ipfsCid || '').replace('ipfs://', '').trim() === cleanCid && e.receiptDataUrl
+      );
+      if (matchingExp && matchingExp.receiptDataUrl) {
+        try {
+          const match = matchingExp.receiptDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            const mimeType = match[1];
+            const buffer = Buffer.from(match[2], 'base64');
+            fs.writeFileSync(receiptPath, buffer);
+            fs.writeFileSync(
+              metaPath,
+              JSON.stringify({ fileName: matchingExp.receiptFileName || 'receipt.pdf', mimeType, timestamp: Date.now() }, null, 2)
+            );
+          }
+        } catch {}
+      }
+    }
+
+    if (fs.existsSync(receiptPath)) {
+      let mimeType = 'application/octet-stream';
+      if (fs.existsSync(metaPath)) {
+        try {
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+          if (meta.mimeType) mimeType = meta.mimeType;
+        } catch {}
+      } else {
+        const head = fs.readFileSync(receiptPath, { flag: 'r' }).subarray(0, 8);
+        if (head.includes(Buffer.from('%PDF'))) mimeType = 'application/pdf';
+        else if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) mimeType = 'image/png';
+        else if (head[0] === 0xff && head[1] === 0xd8) mimeType = 'image/jpeg';
+      }
+
+      res.writeHead(200, {
+        'Content-Type': mimeType,
+        'Content-Disposition': 'inline',
+        'Cache-Control': 'public, max-age=31536000',
+        'X-Ipfs-Path': `/ipfs/${cleanCid}`,
+        'X-Ipfs-Roots': cleanCid,
+        'Access-Control-Expose-Headers': 'X-Ipfs-Path, X-Ipfs-Roots',
+      });
+      fs.createReadStream(receiptPath).pipe(res);
+      return;
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Receipt not found on IPFS' }));
       return;
     }
   }

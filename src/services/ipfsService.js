@@ -64,14 +64,25 @@ export function computeIpfsCidV1(input) {
   return 'b' + uint8ArrayToBase32(combined);
 }
 
+export function fileToDataUrl(file) {
+  return new Promise((resolve) => {
+    if (!file) return resolve(null);
+    if (typeof FileReader === 'undefined') return resolve(null);
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
 class IpfsService {
   constructor() {
     this.jwtStorageKey = 'fairshare_pinata_jwt';
     this.gatewayStorageKey = 'fairshare_ipfs_gateway';
-    this.defaultGateway = 'https://ipfs.io/ipfs/';
+    this.defaultGateway = '/ipfs/';
     this.currentGateway = this.defaultGateway;
     this.currentJwt = '';
-    this.blobCache = new Map(); // cid => objectUrl for instant local preview
+    this.blobCache = new Map(); // cid => dataUrl or objectUrl for instant local preview
   }
 
   getPinataJwt() {
@@ -104,7 +115,11 @@ class IpfsService {
   getGateway() {
     try {
       if (typeof localStorage !== 'undefined') {
-        return localStorage.getItem(this.gatewayStorageKey) || this.currentGateway || this.defaultGateway;
+        const stored = localStorage.getItem(this.gatewayStorageKey);
+        if (stored && stored !== 'https://ipfs.io/ipfs/') {
+          return stored;
+        }
+        return this.defaultGateway;
       }
       return this.currentGateway || this.defaultGateway;
     } catch {
@@ -130,15 +145,67 @@ class IpfsService {
   getGatewayUrl(cid) {
     if (!cid) return '';
     const cleanCid = cid.replace('ipfs://', '').trim();
-    // If we have a cached local blob URL for instant preview, fallback gracefully
     const gateway = this.getGateway();
+    if (!gateway || gateway === 'https://ipfs.io/ipfs/' || gateway === '/ipfs/') {
+      return `/ipfs/${cleanCid}`;
+    }
     return `${gateway}${cleanCid}`;
+  }
+
+  saveReceiptData(cid, dataUrl) {
+    if (!cid || !dataUrl) return;
+    const cleanCid = cid.replace('ipfs://', '').trim();
+    this.blobCache.set(cleanCid, dataUrl);
+    this.blobCache.set(`ipfs://${cleanCid}`, dataUrl);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(`fairshare_receipt_${cleanCid}`, dataUrl);
+      }
+    } catch (err) {
+      // Storage quota may be exceeded; in-memory cache remains active
+      console.warn('LocalStorage receipt cache notice:', err?.message);
+    }
+  }
+
+  async uploadReceiptToServer(cid, fileName, dataUrl) {
+    if (!cid || !dataUrl || typeof fetch === 'undefined') return false;
+    const cleanCid = cid.replace('ipfs://', '').trim();
+    try {
+      const response = await fetch('/api/upload-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cid: cleanCid,
+          fileName: fileName || `receipt-${cleanCid.slice(0, 8)}.pdf`,
+          dataUrl,
+        }),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
 
   getLocalPreviewUrl(cid) {
     if (!cid) return null;
     const cleanCid = cid.replace('ipfs://', '').trim();
-    return this.blobCache.get(cleanCid) || this.blobCache.get(`ipfs://${cleanCid}`) || null;
+    // 1. In-memory blob/data cache
+    const cached = this.blobCache.get(cleanCid) || this.blobCache.get(`ipfs://${cleanCid}`);
+    if (cached) return cached;
+
+    // 2. Browser persistent localStorage
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(`fairshare_receipt_${cleanCid}`);
+        if (stored) {
+          this.blobCache.set(cleanCid, stored);
+          this.blobCache.set(`ipfs://${cleanCid}`, stored);
+          return stored;
+        }
+      }
+    } catch {}
+
+    return null;
   }
 
   async testPinataAuth(jwtToTest) {
@@ -179,8 +246,9 @@ class IpfsService {
   /**
    * Pin a receipt file to IPFS
    * 1. Generates authentic SHA-256 IPFS CIDv1 (using Web Crypto or pure-JS ethers fallback)
-   * 2. If Pinata JWT is configured, uploads directly to Pinata Cloud
-   * 3. Stores in local blob cache for instant browser previews
+   * 2. Persists permanent Base64 dataUrl in localStorage and local receipts server
+   * 3. If Pinata JWT is configured, uploads directly to Pinata Cloud
+   * 4. Stores in local blob cache for instant browser previews
    */
   async pinFile(file, metadata = {}) {
     if (!file) throw new Error('No file provided for IPFS pinning');
@@ -207,15 +275,30 @@ class IpfsService {
     // 2. Compute authentic IPFS CIDv1
     const standardCid = computeIpfsCidV1(digestBytes);
 
-    // Cache local blob URL
+    // 3. Generate permanent Data URL
+    let dataUrl = null;
+    try {
+      dataUrl = await fileToDataUrl(file);
+      if (dataUrl) {
+        this.saveReceiptData(standardCid, dataUrl);
+        // Best-effort asynchronous local server storage
+        this.uploadReceiptToServer(standardCid, file.name, dataUrl).catch(() => {});
+      }
+    } catch {}
+
+    // Cache local blob URL as fallback
     let localBlobUrl = null;
     try {
       if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
         localBlobUrl = URL.createObjectURL(file);
-        this.blobCache.set(standardCid, localBlobUrl);
-        this.blobCache.set(`ipfs://${standardCid}`, localBlobUrl);
+        if (!dataUrl) {
+          this.blobCache.set(standardCid, localBlobUrl);
+          this.blobCache.set(`ipfs://${standardCid}`, localBlobUrl);
+        }
       }
     } catch {}
+
+    const previewUrl = dataUrl || localBlobUrl;
 
     const jwt = this.getPinataJwt();
 
@@ -252,9 +335,8 @@ class IpfsService {
         if (response.ok) {
           const result = await response.json();
           const liveCid = result.IpfsHash || standardCid;
-          if (localBlobUrl) {
-            this.blobCache.set(liveCid, localBlobUrl);
-            this.blobCache.set(`ipfs://${liveCid}`, localBlobUrl);
+          if (previewUrl) {
+            this.saveReceiptData(liveCid, previewUrl);
           }
           return {
             success: true,
@@ -264,7 +346,8 @@ class IpfsService {
             isPinnedLive: true,
             provider: 'Pinata Cloud (Decentralized IPFS)',
             gatewayUrl: this.getGatewayUrl(liveCid),
-            localPreviewUrl: localBlobUrl,
+            localPreviewUrl: previewUrl,
+            dataUrl,
             pinSize: result.PinSize || file.size,
           };
         } else {
@@ -284,7 +367,8 @@ class IpfsService {
       isPinnedLive: false,
       provider: 'IPFS Content Addressing (CIDv1)',
       gatewayUrl: this.getGatewayUrl(standardCid),
-      localPreviewUrl: localBlobUrl,
+      localPreviewUrl: previewUrl,
+      dataUrl,
       pinSize: file.size,
     };
   }

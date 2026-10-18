@@ -59,9 +59,9 @@ export default function ConsensusHub({
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
-      e.title.toLowerCase().includes(q) ||
-      e.payerName.toLowerCase().includes(q) ||
-      String(e.id).includes(q) ||
+      (e.title || '').toLowerCase().includes(q) ||
+      (e.payerName || '').toLowerCase().includes(q) ||
+      String(e.id || '').includes(q) ||
       (e.notes && e.notes.toLowerCase().includes(q))
     );
   });

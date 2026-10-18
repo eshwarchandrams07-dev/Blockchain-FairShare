@@ -31,12 +31,15 @@ import {
   History, 
   Users, 
   X, 
-  Fingerprint,
-  BellRing,
-  CheckCircle2,
-  XCircle,
-  ExternalLink,
-  Eye
+  Fingerprint, 
+  BellRing, 
+  CheckCircle2, 
+  XCircle, 
+  ExternalLink, 
+  Download, 
+  FileText, 
+  ShieldCheck,
+  Globe
 } from 'lucide-react';
 import { blockchainService } from './services/blockchainState';
 import { authService } from './services/authService';
@@ -848,31 +851,35 @@ export default function App() {
               </div>
 
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', flexWrap: 'wrap', gap: '6px' }}>
-                  <span style={{ color: 'var(--text-dim)' }}>InterPlanetary File System (IPFS) CID:</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {ipfsService.getLocalPreviewUrl(inspectReceiptData.ipfsCid) && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                  <span style={{ color: 'var(--text-dim)', fontWeight: 600 }}>InterPlanetary File System (IPFS) CID:</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {inspectReceiptData.ipfsCid && (
                       <a
-                        href={ipfsService.getLocalPreviewUrl(inspectReceiptData.ipfsCid)}
+                        href={`/ipfs/${inspectReceiptData.ipfsCid.replace('ipfs://', '')}`}
                         target="_blank"
                         rel="noreferrer"
+                        className="badge badge-approved"
                         style={{
-                          color: 'var(--color-emerald-light)',
                           fontSize: '11px',
                           fontWeight: 700,
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '3px',
-                          textDecoration: 'none'
+                          gap: '4px',
+                          textDecoration: 'none',
+                          padding: '4px 8px',
+                          cursor: 'pointer'
                         }}
+                        title="View file directly via IPFS Gateway (/ipfs/<cid>)"
                       >
-                        <Eye size={12} />
-                        <span>View Cached Document</span>
+                        <Globe size={12} />
+                        <span>View in IPFS (/ipfs)</span>
+                        <ExternalLink size={10} />
                       </a>
                     )}
                     {inspectReceiptData.ipfsCid && (
                       <a
-                        href={inspectReceiptData.ipfsGatewayUrl || ipfsService.getGatewayUrl(inspectReceiptData.ipfsCid)}
+                        href={`https://ipfs.io/ipfs/${inspectReceiptData.ipfsCid.replace('ipfs://', '')}`}
                         target="_blank"
                         rel="noreferrer"
                         style={{
@@ -884,8 +891,9 @@ export default function App() {
                           gap: '3px',
                           textDecoration: 'none'
                         }}
+                        title="View on Global Public IPFS Gateway (ipfs.io)"
                       >
-                        <span>Open on IPFS Gateway</span>
+                        <span>ipfs.io Gateway</span>
                         <ExternalLink size={11} />
                       </a>
                     )}
@@ -894,21 +902,168 @@ export default function App() {
                 <span className="mono" style={{ color: 'var(--text-main)', wordBreak: 'break-all', background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)', padding: '6px 10px', borderRadius: '4px', display: 'block' }}>
                   {inspectReceiptData.ipfsCid}
                 </span>
-                {inspectReceiptData.isPinnedLive && (
-                  <div style={{ marginTop: '4px', fontSize: '11px', color: '#166534', fontWeight: 600 }}>
-                    ⚡ Pinned live on Pinata Cloud IPFS Cluster
+                
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {inspectReceiptData.isPinnedLive 
+                      ? '⚡ Pinned live across Pinata decentralized IPFS swarm' 
+                      : '📦 Content-addressed via SHA-256 CIDv1 (Directly accessible via /ipfs/ gateway)'}
+                  </span>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <a
+                      href={`https://dweb.link/ipfs/${(inspectReceiptData.ipfsCid || '').replace('ipfs://', '')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: '10px', color: 'var(--text-dim)', textDecoration: 'none' }}
+                      title="Open on Protocol Labs dweb.link gateway"
+                    >
+                      dweb.link ↗
+                    </a>
+                    <span style={{ color: 'var(--border-medium)' }}>•</span>
+                    <a
+                      href={`https://gateway.pinata.cloud/ipfs/${(inspectReceiptData.ipfsCid || '').replace('ipfs://', '')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: '10px', color: 'var(--text-dim)', textDecoration: 'none' }}
+                      title="Open on Pinata IPFS gateway"
+                    >
+                      pinata.cloud ↗
+                    </a>
                   </div>
-                )}
-                {ipfsService.getLocalPreviewUrl(inspectReceiptData.ipfsCid) && 
-                 /\.(png|jpe?g|webp|gif)$/i.test(inspectReceiptData.receiptFileName || '') && (
-                  <div style={{ marginTop: '10px', textAlign: 'center', background: 'var(--bg-canvas)', borderRadius: '6px', padding: '8px', border: '1px solid var(--border-subtle)' }}>
-                    <img
-                      src={ipfsService.getLocalPreviewUrl(inspectReceiptData.ipfsCid)}
-                      alt="Receipt Document Preview"
-                      style={{ maxHeight: '180px', maxWidth: '100%', borderRadius: '4px', objectFit: 'contain' }}
-                    />
-                  </div>
-                )}
+                </div>
+
+                {/* Dynamic Receipt File Preview: Handles Images, PDFs, and Cryptographic Digital Vouchers */}
+                {(() => {
+                  const cidClean = (inspectReceiptData.ipfsCid || '').replace(/^ipfs:\/\//, '').trim();
+                  const ipfsUrl = cidClean ? `/ipfs/${cidClean}` : null;
+                  const dataFallback = inspectReceiptData.receiptDataUrl || 
+                                       ipfsService.getLocalPreviewUrl(inspectReceiptData.ipfsCid) || 
+                                       (cidClean ? `/api/receipts/${cidClean}` : null);
+                  const previewUrl = ipfsUrl || dataFallback;
+                  const fileName = inspectReceiptData.receiptFileName || 'receipt.pdf';
+                  const isImage = (dataFallback && dataFallback.startsWith('data:image/')) || /\.(png|jpe?g|webp|gif|svg)$/i.test(fileName);
+                  const isPdf = (dataFallback && dataFallback.startsWith('data:application/pdf')) || /\.pdf$/i.test(fileName);
+
+                  if (isImage) {
+                    return (
+                      <div style={{ marginTop: '12px', background: 'var(--bg-canvas)', borderRadius: '8px', padding: '12px', border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+                            Attached Receipt Image (Decentralized IPFS)
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <a
+                              href={previewUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn btn-secondary btn-sm"
+                              style={{ fontSize: '11px', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <ExternalLink size={12} />
+                              <span>View in IPFS</span>
+                            </a>
+                            <a
+                              href={previewUrl}
+                              download={fileName}
+                              className="btn btn-secondary btn-sm"
+                              style={{ fontSize: '11px', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <Download size={12} />
+                              <span>Download</span>
+                            </a>
+                          </div>
+                        </div>
+                        <img
+                          src={previewUrl}
+                          alt="Receipt Document Preview"
+                          style={{ maxHeight: '280px', maxWidth: '100%', borderRadius: '6px', objectFit: 'contain', border: '1px solid var(--border-subtle)' }}
+                        />
+                      </div>
+                    );
+                  }
+
+                  if (isPdf) {
+                    return (
+                      <div style={{ marginTop: '12px', background: 'var(--bg-canvas)', borderRadius: '8px', padding: '12px', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <FileText size={16} style={{ color: 'var(--color-rose)' }} />
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>
+                              {fileName}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <a
+                              href={previewUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn btn-primary btn-sm"
+                              style={{ fontSize: '11px', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <ExternalLink size={12} />
+                              <span>Open PDF in IPFS</span>
+                            </a>
+                            <a
+                              href={previewUrl}
+                              download={fileName}
+                              className="btn btn-secondary btn-sm"
+                              style={{ fontSize: '11px', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <Download size={12} />
+                              <span>Download</span>
+                            </a>
+                          </div>
+                        </div>
+                        <iframe
+                          src={previewUrl}
+                          title="Receipt PDF Preview"
+                          style={{ width: '100%', height: '320px', border: '1px solid var(--border-subtle)', borderRadius: '6px', background: '#ffffff' }}
+                        />
+                      </div>
+                    );
+                  }
+
+                  // Fallback: Cryptographic Digital Voucher Card
+                  return (
+                    <div style={{ marginTop: '12px', background: 'var(--bg-canvas)', borderRadius: '8px', padding: '14px', border: '1px solid var(--border-medium)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+                          Digital Receipt Voucher
+                        </span>
+                        <span className="badge badge-approved" style={{ fontSize: '10px' }}>
+                          ✓ Ledger Anchored
+                        </span>
+                      </div>
+                      <div style={{ background: 'var(--bg-surface-elevated)', borderRadius: '6px', padding: '10px 12px', border: '1px solid var(--border-subtle)', fontSize: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Title:</span>
+                          <strong>{inspectReceiptData.title}</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Amount Billed:</span>
+                          <strong style={{ color: 'var(--color-primary-light)' }}>{formatCents(inspectReceiptData.totalAmount)}</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Payer:</span>
+                          <span>{inspectReceiptData.payerName} ({shortenAddress(inspectReceiptData.payer)})</span>
+                        </div>
+                      </div>
+                      <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          onClick={() => {
+                            setInspectReceiptData(null);
+                            setActiveTab('verifier');
+                          }}
+                        >
+                          <ShieldCheck size={12} />
+                          <span>Verify in Cryptographic Verifier</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div style={{ background: 'var(--bg-surface-elevated)', border: '1px solid rgba(21, 128, 61, 0.3)', borderRadius: 'var(--radius-md)', padding: '12px', color: 'var(--color-emerald-light)', fontSize: '12px', fontWeight: 600 }}>

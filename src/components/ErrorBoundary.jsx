@@ -22,11 +22,17 @@ export default class ErrorBoundary extends React.Component {
 
   handleResetApp = () => {
     try {
-      localStorage.removeItem('fairshare_auth_user_v1');
-      localStorage.removeItem('fairshare_blockchain_v5_publicledger');
-      localStorage.removeItem('fairshare_device_profile_v2');
-      localStorage.removeItem('fairshare_unlocked_groups_v2');
-      sessionStorage.clear();
+      if (typeof localStorage !== 'undefined') {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('fairshare_')) keysToRemove.push(k);
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+      }
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.clear();
+      }
       window.location.href = '/';
     } catch {
       window.location.reload();

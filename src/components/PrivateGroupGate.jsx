@@ -21,16 +21,6 @@ export default function PrivateGroupGate({
   onSelectGroup,
   currentUser = null
 }) {
-  const matchingGroup = (groups || []).find(g => {
-    if (!g.ledgerId) return false;
-    const gClean = g.ledgerId.trim().toUpperCase();
-    const inputClean = ledgerIdInput.trim().toUpperCase();
-    return gClean === inputClean || gClean.replace(/[^A-Z0-9]/g, '') === inputClean.replace(/[^A-Z0-9]/g, '');
-  }) || currentGroup;
-
-  const targetLedgerId = currentGroup?.ledgerId || matchingGroup?.ledgerId || 'VAULT-001';
-  const targetGroupName = currentGroup?.name || matchingGroup?.name || 'Private Sovereign Ledger';
-
   const [ledgerIdInput, setLedgerIdInput] = useState(() => currentGroup?.ledgerId || '');
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -39,6 +29,16 @@ export default function PrivateGroupGate({
 
   // Modal state for creating a new group while locked
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  const matchingGroup = (groups || []).find(g => {
+    if (!g.ledgerId) return false;
+    const gClean = g.ledgerId.trim().toUpperCase();
+    const inputClean = (ledgerIdInput || '').trim().toUpperCase();
+    return gClean === inputClean || gClean.replace(/[^A-Z0-9]/g, '') === inputClean.replace(/[^A-Z0-9]/g, '');
+  }) || currentGroup;
+
+  const targetLedgerId = currentGroup?.ledgerId || matchingGroup?.ledgerId || 'VAULT-001';
+  const targetGroupName = currentGroup?.name || matchingGroup?.name || 'Private Sovereign Ledger';
 
   const handleSubmit = (e) => {
     e.preventDefault();

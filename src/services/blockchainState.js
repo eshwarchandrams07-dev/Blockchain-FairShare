@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { generateTxHash } from '../utils/cryptoUtils.js';
 import { liveSync, playChimeSound } from './liveSyncService.js';
 import { authService, deriveWalletFromEmail } from './authService.js';
+import { ipfsService } from './ipfsService.js';
 import deploymentsData from '../contracts/deployments.json' with { type: 'json' };
 
 export const APPROVAL_POLICIES = {
@@ -621,6 +622,17 @@ class BlockchainStateService {
           if (e.payerName === 'Priya Sharma' || e.title === 'Wifi' || e.title === 'Veggis') return false;
           return true;
         });
+
+        // Warm ipfsService cache with any persisted receiptDataUrl
+        if (Array.isArray(this.expenses)) {
+          for (const exp of this.expenses) {
+            if (exp?.ipfsCid && exp?.receiptDataUrl) {
+              try {
+                ipfsService.saveReceiptData(exp.ipfsCid, exp.receiptDataUrl);
+              } catch {}
+            }
+          }
+        }
 
         // Save sanitized state
         this.saveState(true);
@@ -1737,6 +1749,7 @@ class BlockchainStateService {
     shares,
     receiptHash,
     receiptFileName,
+    receiptDataUrl,
     ipfsCid,
     ipfsGatewayUrl,
     isPinnedLive,
@@ -1768,6 +1781,8 @@ class BlockchainStateService {
       };
     });
 
+    const cleanCid = ipfsCid || 'ipfs://bafkreiaaaaaaaafairshare';
+
     const newExpense = {
       id: newId,
       groupId,
@@ -1780,8 +1795,9 @@ class BlockchainStateService {
       status: initialStatus,
       receiptHash: receiptHash || '0x' + '0'.repeat(64),
       receiptFileName: receiptFileName || 'receipt.pdf',
-      ipfsCid: ipfsCid || 'ipfs://bafkreiaaaaaaaafairshare',
-      ipfsGatewayUrl: ipfsGatewayUrl || (ipfsCid ? `https://ipfs.io/ipfs/${ipfsCid.replace('ipfs://', '')}` : null),
+      receiptDataUrl: receiptDataUrl || null,
+      ipfsCid: cleanCid,
+      ipfsGatewayUrl: ipfsGatewayUrl || (cleanCid ? `/ipfs/${cleanCid.replace('ipfs://', '')}` : null),
       isPinnedLive: !!isPinnedLive,
       isBaseSepolia: this.networkMode === 'base-sepolia',
       notes: notes || '',
@@ -1792,6 +1808,12 @@ class BlockchainStateService {
       shares,
       votes,
     };
+
+    if (receiptDataUrl && cleanCid) {
+      try {
+        ipfsService.saveReceiptData(cleanCid, receiptDataUrl);
+      } catch {}
+    }
 
     this.expenses.unshift(newExpense);
 
@@ -2206,7 +2228,10 @@ class BlockchainStateService {
       status: initialStatus,
       receiptHash: newExpenseData.receiptHash || oldExp.receiptHash,
       receiptFileName: newExpenseData.receiptFileName || oldExp.receiptFileName,
+      receiptDataUrl: newExpenseData.receiptDataUrl || oldExp.receiptDataUrl || null,
       ipfsCid: newExpenseData.ipfsCid || oldExp.ipfsCid,
+      ipfsGatewayUrl: newExpenseData.ipfsGatewayUrl || oldExp.ipfsGatewayUrl || null,
+      isPinnedLive: newExpenseData.isPinnedLive !== undefined ? newExpenseData.isPinnedLive : oldExp.isPinnedLive,
       notes: newExpenseData.notes || '',
       createdAt: Date.now(),
       previousExpenseId: oldExpenseId,

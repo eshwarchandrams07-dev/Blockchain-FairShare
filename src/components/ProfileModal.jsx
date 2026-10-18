@@ -11,8 +11,12 @@ import {
 
 const AVATAR_OPTIONS = ['🧑‍💻', '👩‍💼', '👨‍💻', '👩‍🎨', '👑', '🦁', '⚡', '💎', '🌟', '🎯'];
 
-export default function ProfileModal({
-  isOpen,
+export default function ProfileModal(props) {
+  if (!props.isOpen) return null;
+  return <ProfileModalContent {...props} />;
+}
+
+function ProfileModalContent({
   onClose,
   currentProfile,
   currentUser,
@@ -27,8 +31,6 @@ export default function ProfileModal({
   const [upiId, setUpiId] = useState(currentProfile?.upiId || '');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
-
-  if (!isOpen) return null;
 
   const handleCopyAddress = () => {
     if (currentProfile?.address) {

@@ -47,6 +47,14 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
   const [certDate, setCertDate] = useState('');
   const [verificationResult, setVerificationResult] = useState(null);
 
+  if (!currentGroup) {
+    return (
+      <div className="glass-panel" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ color: 'var(--text-muted)' }}>No group selected or ledger loading...</p>
+      </div>
+    );
+  }
+
   const groupLogs = (auditLogs || []).filter(l => l && currentGroup && l.groupId === currentGroup.id);
 
   const handleVerifyLedgerChain = () => {
@@ -434,10 +442,10 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
                     FAIRSHARE PROTOCOL • BASE SEPOLIA TESTNET
                   </div>
                   <div style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', marginTop: '2px' }}>
-                    {currentGroup.name}
+                    {currentGroup?.name || 'Ledger'}
                   </div>
                   <div style={{ fontSize: '12px', color: '#64748b' }}>
-                    Decentralized Ledger ID: #{currentGroup.id} • Created by {shortenAddress(currentGroup.creator)}
+                    Decentralized Ledger ID: #{currentGroup?.id || 1} • Created by {shortenAddress(currentGroup?.creator || '')}
                   </div>
                 </div>
 

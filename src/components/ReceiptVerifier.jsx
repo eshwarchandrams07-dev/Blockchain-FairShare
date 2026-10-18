@@ -9,7 +9,6 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { computeFileHash, formatCents, shortenAddress } from '../utils/cryptoUtils';
-import { ipfsService } from '../services/ipfsService';
 
 export default function ReceiptVerifier({ expenses, currentGroup }) {
   const [file, setFile] = useState(null);
@@ -229,7 +228,7 @@ export default function ReceiptVerifier({ expenses, currentGroup }) {
                         <span><strong>IPFS CID:</strong> {matchResult.expense.ipfsCid}</span>
                         {matchResult.expense.ipfsCid && (
                           <a
-                            href={matchResult.expense.ipfsGatewayUrl || ipfsService.getGatewayUrl(matchResult.expense.ipfsCid)}
+                            href={`/ipfs/${matchResult.expense.ipfsCid.replace(/^ipfs:\/\//, '').trim()}`}
                             target="_blank"
                             rel="noreferrer"
                             style={{ color: '#0052FF', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px', textDecoration: 'none', fontSize: '11px' }}
@@ -308,7 +307,7 @@ export default function ReceiptVerifier({ expenses, currentGroup }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {exp.ipfsCid && (
                       <a
-                        href={exp.ipfsGatewayUrl || ipfsService.getGatewayUrl(exp.ipfsCid)}
+                        href={`/ipfs/${exp.ipfsCid.replace(/^ipfs:\/\//, '').trim()}`}
                         target="_blank"
                         rel="noreferrer"
                         className="btn btn-secondary btn-sm"

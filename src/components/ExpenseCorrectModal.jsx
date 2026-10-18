@@ -260,7 +260,10 @@ function ExpenseCorrectModalContent({ onClose, expense, currentGroup, onConfirmC
         shares: calculatedShares,
         receiptHash: expense.receiptHash,
         receiptFileName: expense.receiptFileName,
+        receiptDataUrl: expense.receiptDataUrl || null,
         ipfsCid: expense.ipfsCid,
+        ipfsGatewayUrl: expense.ipfsGatewayUrl || null,
+        isPinnedLive: !!expense.isPinnedLive,
         notes: `Correction linked to #${expense.id}`,
       }, reason.trim());
 

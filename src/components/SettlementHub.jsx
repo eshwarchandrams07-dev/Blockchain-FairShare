@@ -28,6 +28,7 @@ import {
   isValidUpiId,
   isPlaceholderUpi
 } from '../utils/cryptoUtils';
+import QrCodeDisplay from './QrCodeDisplay';
 
 export default function SettlementHub({
   currentGroup,
@@ -58,6 +59,14 @@ export default function SettlementHub({
   const [customUpiInput, setCustomUpiInput] = useState('');
   const [isEditingUpi, setIsEditingUpi] = useState(false);
 
+  if (!currentGroup) {
+    return (
+      <div className="glass-panel" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ color: 'var(--text-muted)' }}>No group selected or ledger loading...</p>
+      </div>
+    );
+  }
+
   // Run Min-Cash-Flow debt simplification
   const simplifiedTransfers = simplifyDebts(groupBalances);
 
@@ -68,7 +77,7 @@ export default function SettlementHub({
     verifiedMembers,
     expenses || [],
     settlements || [],
-    currentGroup.id
+    currentGroup?.id || 1
   );
 
   const rawCount = rawBilateralTransfers.length;
@@ -79,7 +88,7 @@ export default function SettlementHub({
   const currentTransfers = algoViewMode === 'SIMPLIFIED' ? simplifiedTransfers : rawBilateralTransfers;
 
   // Group settlements
-  const groupSettlements = settlements.filter(s => s.groupId === currentGroup.id);
+  const groupSettlements = (settlements || []).filter(s => s && s.groupId === currentGroup.id);
 
   const handleExecuteCrypto = (transfer) => {
     try {
@@ -430,7 +439,7 @@ export default function SettlementHub({
                                 upiId: upi,
                                 payeeName: tr.toName,
                                 amountInRupees: (tr.amount / 100).toFixed(2),
-                                note: `FairShare - ${currentGroup.name}`
+                                note: `FairShare - ${currentGroup?.name || 'Ledger'}`
                               });
                               navigator.clipboard.writeText(uri);
                               alert(`Payment intent link for ₹${(tr.amount / 100).toFixed(2)} copied to clipboard!`);
@@ -597,10 +606,10 @@ export default function SettlementHub({
           upiId: rawRecipientUpi,
           payeeName: activeUpiModal.toName,
           amountInRupees,
-          note: `FairShare - ${currentGroup.name}`
+          note: `FairShare - ${currentGroup?.name || 'Ledger'}`
         });
 
-        const whatsappText = `Hi ${activeUpiModal.toName}, please pay ₹${amountInRupees} for FairShare (${currentGroup.name}) via UPI: ${upiUri}`;
+        const whatsappText = `Hi ${activeUpiModal.toName}, please pay ₹${amountInRupees} for FairShare (${currentGroup?.name || 'Ledger'}) via UPI: ${upiUri}`;
         const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
 
         const handleCopyUpi = () => {
@@ -825,10 +834,10 @@ export default function SettlementHub({
               {/* Dynamic QR Code Box */}
               <div style={{ textAlign: 'center', marginBottom: '14px' }}>
                 <div style={{ display: 'inline-block', background: '#ffffff', padding: '16px', borderRadius: '18px', border: '1px solid var(--border-medium)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }}>
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&ecc=M&data=${encodeURIComponent(upiUri)}`}
+                  <QrCodeDisplay 
+                    data={upiUri}
+                    size={200}
                     alt="Scan UPI QR Code"
-                    style={{ width: '200px', height: '200px', display: 'block', margin: '0 auto', imageRendering: 'crisp-edges' }}
                   />
                   <div style={{ fontSize: '12px', color: '#1C1613', fontWeight: 800, marginTop: '10px', letterSpacing: '0.6px' }}>
                     SCAN WITH ANY UPI APP CAMERA

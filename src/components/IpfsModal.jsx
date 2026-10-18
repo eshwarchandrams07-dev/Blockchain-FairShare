@@ -146,7 +146,8 @@ function IpfsModalContent({ onClose, onConfigSaved }) {
               />
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
                 {[
-                  { label: 'ipfs.io (Default)', url: 'https://ipfs.io/ipfs/' },
+                  { label: 'FairShare Local Gateway (/ipfs/) [Instant]', url: '/ipfs/' },
+                  { label: 'ipfs.io (Public Swarm)', url: 'https://ipfs.io/ipfs/' },
                   { label: 'dweb.link (Protocol Labs)', url: 'https://dweb.link/ipfs/' },
                   { label: 'cloudflare-ipfs.com', url: 'https://cloudflare-ipfs.com/ipfs/' },
                   { label: 'gateway.pinata.cloud', url: 'https://gateway.pinata.cloud/ipfs/' },

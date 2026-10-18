@@ -10,7 +10,8 @@ import {
   ShieldCheck, 
   Fingerprint,
   Download,
-  RotateCcw
+  RotateCcw,
+  Globe
 } from 'lucide-react';
 import { formatCents, shortenAddress } from '../utils/cryptoUtils';
 import { STATUS_LABELS, EXPENSE_STATUS } from '../services/blockchainState';
@@ -70,8 +71,8 @@ export default function ExpenseList({
   const filteredBySearch = filteredByCategory.filter(e => {
     const q = searchQuery.toLowerCase();
     return (
-      e.title.toLowerCase().includes(q) ||
-      e.payerName.toLowerCase().includes(q) ||
+      (e.title || '').toLowerCase().includes(q) ||
+      (e.payerName || '').toLowerCase().includes(q) ||
       (e.category && e.category.toLowerCase().includes(q)) ||
       (e.notes && e.notes.toLowerCase().includes(q))
     );
@@ -431,7 +432,7 @@ export default function ExpenseList({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                   {/* Receipt Proof button */}
                   {exp.receiptHash && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <button 
                         className="btn btn-secondary btn-sm"
                         onClick={() => onInspectReceipt(exp)}
@@ -440,6 +441,27 @@ export default function ExpenseList({
                         <FileCheck2 size={14} style={{ color: 'var(--color-cyan)' }} />
                         <span>Receipt</span>
                       </button>
+                      {exp.ipfsCid && (
+                        <a
+                          href={`/ipfs/${exp.ipfsCid.replace('ipfs://', '')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            color: 'var(--color-primary-light)',
+                            fontWeight: 600,
+                            padding: '6px 10px'
+                          }}
+                          title={`Open ${exp.receiptFileName || 'receipt'} directly on IPFS Gateway (/ipfs/${exp.ipfsCid.replace('ipfs://', '')})`}
+                        >
+                          <Globe size={13} />
+                          <span>View in IPFS</span>
+                        </a>
+                      )}
                       {exp.isPinnedLive && (
                         <span 
                           className="badge badge-approved" 

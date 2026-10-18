@@ -7,9 +7,10 @@ import {
   ExternalLink,
   Eye
 } from 'lucide-react';
-import { dollarsToCents, generateIpfsCid, formatCents } from '../utils/cryptoUtils';
+import { ethers } from 'ethers';
+import { dollarsToCents, generateIpfsCid, formatCents, generateDigitalReceiptPdf } from '../utils/cryptoUtils';
 import { SPLIT_TYPES } from '../services/blockchainState';
-import { ipfsService } from '../services/ipfsService';
+import { ipfsService, computeIpfsCidV1 } from '../services/ipfsService';
 
 const CATEGORIES = [
   'Groceries',
@@ -55,6 +56,7 @@ function AddExpenseModalContent({
     return pcts;
   }); // address => percent string
   const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptDataUrl, setReceiptDataUrl] = useState('');
   const [receiptHash, setReceiptHash] = useState('');
   const [ipfsCid, setIpfsCid] = useState('');
   const [ipfsGatewayUrl, setIpfsGatewayUrl] = useState('');
@@ -89,6 +91,7 @@ function AddExpenseModalContent({
       });
 
       setReceiptFile(file);
+      setReceiptDataUrl(pinResult.dataUrl || pinResult.localPreviewUrl || '');
       setReceiptHash(pinResult.hashHex);
       setIpfsCid(pinResult.cid);
       setIpfsGatewayUrl(pinResult.gatewayUrl);
@@ -251,10 +254,46 @@ function AddExpenseModalContent({
       }
     }
 
-    // Default mock hash if none provided
-    const finalReceiptHash = receiptHash || '0x' + Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, '0')).join('');
-    const finalIpfsCid = ipfsCid || generateIpfsCid(finalReceiptHash);
-    const finalGatewayUrl = ipfsGatewayUrl || ipfsService.getGatewayUrl(finalIpfsCid);
+    let finalReceiptHash = receiptHash;
+    let finalIpfsCid = ipfsCid;
+    let finalGatewayUrl = ipfsGatewayUrl;
+    let finalDataUrl = receiptDataUrl;
+    let finalFileName = receiptFile ? receiptFile.name : `invoice-${Date.now().toString(36)}.pdf`;
+
+    if (!finalDataUrl) {
+      // Auto-generate authentic cryptographic digital invoice voucher
+      const payerObj = (currentGroup?.members || []).find(m => m && m.address && currentAccount && m.address.toLowerCase() === currentAccount.toLowerCase());
+      finalDataUrl = generateDigitalReceiptPdf({
+        title: title.trim(),
+        category,
+        totalAmount: totalCents,
+        payerName: payerObj?.name || 'Member',
+        expenseId: Date.now().toString().slice(-4),
+        dateStr: new Date().toISOString().slice(0, 10),
+      });
+
+      // Compute authentic SHA-256 and IPFS CIDv1 from the generated PDF
+      try {
+        const pdfBase64 = finalDataUrl.replace(/^data:application\/pdf;base64,/, '');
+        const binaryStr = atob(pdfBase64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        finalReceiptHash = ethers.sha256(bytes);
+        finalIpfsCid = computeIpfsCidV1(ethers.getBytes(finalReceiptHash));
+        finalGatewayUrl = `/ipfs/${finalIpfsCid}`;
+
+        // Save into client cache and persist to server
+        ipfsService.saveReceiptData(finalIpfsCid, finalDataUrl);
+        ipfsService.uploadReceiptToServer(finalIpfsCid, finalFileName, finalDataUrl).catch(() => {});
+      } catch (err) {
+        console.warn('Digital invoice voucher generation notice:', err);
+        finalReceiptHash = finalReceiptHash || '0x' + Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, '0')).join('');
+        finalIpfsCid = finalIpfsCid || generateIpfsCid(finalReceiptHash);
+        finalGatewayUrl = finalGatewayUrl || `/ipfs/${finalIpfsCid}`;
+      }
+    }
 
     try {
       onSubmitExpense({
@@ -265,7 +304,8 @@ function AddExpenseModalContent({
         splitType,
         shares,
         receiptHash: finalReceiptHash,
-        receiptFileName: receiptFile ? receiptFile.name : 'receipt_invoice.pdf',
+        receiptFileName: finalFileName,
+        receiptDataUrl: finalDataUrl,
         ipfsCid: finalIpfsCid,
         ipfsGatewayUrl: finalGatewayUrl,
         isPinnedLive,
@@ -546,14 +586,24 @@ function AddExpenseModalContent({
                     <strong>IPFS CID:</strong> {ipfsCid}
                   </div>
 
+                  {receiptDataUrl && (receiptDataUrl.startsWith('data:image/') || (receiptFile && receiptFile.type?.startsWith('image/'))) && (
+                    <div style={{ marginTop: '8px', textAlign: 'center', background: 'var(--bg-canvas)', borderRadius: '6px', padding: '6px', border: '1px solid var(--border-subtle)' }}>
+                      <img
+                        src={receiptDataUrl}
+                        alt="Receipt Preview"
+                        style={{ maxHeight: '120px', maxWidth: '100%', borderRadius: '4px', objectFit: 'contain' }}
+                      />
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--border-subtle)' }}>
                     <span style={{ color: 'var(--text-dim)', fontSize: '10px' }}>
                       Provider: {ipfsProvider || 'IPFS (CIDv1)'}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {receiptFile && (
+                      {(receiptDataUrl || receiptFile) && (
                         <a
-                          href={ipfsService.getLocalPreviewUrl(ipfsCid) || URL.createObjectURL(receiptFile)}
+                          href={receiptDataUrl || ipfsService.getLocalPreviewUrl(ipfsCid) || (receiptFile ? URL.createObjectURL(receiptFile) : '#')}
                           target="_blank"
                           rel="noreferrer"
                           style={{

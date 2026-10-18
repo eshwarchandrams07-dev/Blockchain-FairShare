@@ -32,6 +32,14 @@ export default function DashboardOverview({
 }) {
   const [copiedAuditLink, setCopiedAuditLink] = useState(false);
 
+  if (!currentGroup) {
+    return (
+      <div className="glass-panel" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ color: 'var(--text-muted)' }}>Loading ledger state...</p>
+      </div>
+    );
+  }
+
   // Calculate total approved volume
   const approvedExpenses = (expenses || []).filter(e => e && Number(e.groupId) === Number(currentGroup?.id) && Number(e.status) === 1);
   const totalVolume = approvedExpenses.reduce((sum, e) => sum + (e.totalAmount || 0), 0);
@@ -139,10 +147,10 @@ export default function DashboardOverview({
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '24px' }}>{isPrivate ? '🛡️' : '🌐'}</span>
             <h2 style={{ fontSize: '22px', color: 'var(--text-main)', fontWeight: 800 }}>
-              {currentGroup.name === 'Shared Roommates Ledger' ? 'Shared Ledger' : currentGroup.name}
+              {(currentGroup?.name || 'Ledger') === 'Shared Roommates Ledger' ? 'Shared Ledger' : (currentGroup?.name || 'Ledger')}
             </h2>
             <span className="badge badge-neutral mono" style={{ fontSize: '11px', fontWeight: 700 }}>
-              {currentGroup?.ledgerId || `#${currentGroup.id}`}
+              {currentGroup?.ledgerId || `#${currentGroup?.id || 1}`}
             </span>
             <span 
               className={`badge ${isPrivate ? 'badge-pending' : 'badge-approved'}`} 
@@ -153,7 +161,7 @@ export default function DashboardOverview({
             </span>
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '14px', maxWidth: '640px', margin: 0 }}>
-            {currentGroup.description}
+            {currentGroup?.description || ''}
           </p>
         </div>
 
