@@ -199,6 +199,38 @@ async function runTests() {
     assert(resFromLedger.headers['content-type'] === 'application/pdf', 'resolved receipt has Content-Type: application/pdf');
   }
 
+  // --- 7. Test URL Encoding & Complex Data URL Handling ---
+  console.log('\n--- 7. URL Encoding & Complex Data URL Handling ---');
+  {
+    const complexDataUrl = `data:application/pdf;name=custom-doc.pdf;base64,${samplePdfBytes.toString('base64')}`;
+    const rawCid = 'bafkreicomplexparameterandencodingtest9876543210';
+    const encodedCid = encodeURIComponent(`ipfs://${rawCid}`);
+
+    const uploadReq = {
+      method: 'POST',
+      body: JSON.stringify({
+        cid: encodedCid,
+        fileName: 'custom-doc.pdf',
+        dataUrl: complexDataUrl,
+      }),
+    };
+    const uploadRes = createMockRes();
+    await uploadHandler(uploadReq, uploadRes);
+    assert(uploadRes.statusCode === 200, 'uploadHandler accepts stringified JSON body and URL-encoded CID');
+    assert(uploadRes.getBody()?.cid === rawCid, 'cleanly normalized CID matches raw format');
+
+    const getReq = {
+      method: 'GET',
+      query: { cid: encodedCid },
+      url: `/api/ipfs?cid=${encodedCid}`,
+    };
+    const getRes = createMockRes();
+    await ipfsHandler(getReq, getRes);
+    assert(getRes.statusCode === 200, 'ipfsHandler resolves URL-encoded CID correctly');
+    assert(getRes.headers['content-type'] === 'application/pdf', 'parameter-rich data URL correctly parsed to application/pdf');
+    assert(getRes.headers['content-disposition'].includes('custom-doc.pdf'), 'preserves filename in Content-Disposition');
+  }
+
   console.log('\n====================================================');
   console.log(`🎉 VERCEL ENDPOINTS TEST SUMMARY: ${passed} / ${total} passed!`);
   console.log('====================================================\n');

@@ -1,4 +1,4 @@
-import { saveReceipt } from './_store.js';
+import { saveReceipt, normalizeCid } from './_store.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,14 +14,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
     const { cid, fileName, dataUrl } = body || {};
 
     if (!cid || !dataUrl) {
       return res.status(400).json({ error: 'Missing cid or dataUrl parameter' });
     }
 
-    const cleanCid = String(cid).replace(/^ipfs:\/\//, '').trim();
+    const cleanCid = normalizeCid(cid);
     await saveReceipt(cleanCid, fileName, dataUrl);
 
     return res.status(200).json({

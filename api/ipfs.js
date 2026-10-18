@@ -1,4 +1,4 @@
-import { getReceipt } from './_store.js';
+import { getReceipt, normalizeCid } from './_store.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
         rawCid = pathname.replace('/api/ipfs/', '');
       }
     }
-    const cleanCid = String(rawCid).split('?')[0].split('/')[0].replace(/^ipfs:\/\//, '').trim();
+    const cleanCid = normalizeCid(rawCid);
 
     if (!cleanCid) {
       return res.status(400).json({ error: 'Missing IPFS CID parameter' });

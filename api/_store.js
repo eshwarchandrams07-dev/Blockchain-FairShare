@@ -133,8 +133,30 @@ export async function savePersistedState(adapter, state) {
   return false;
 }
 
-function parseDataUrl(dataUrl) {
+export function normalizeCid(cid) {
+  if (!cid) return '';
+  let str = String(cid).trim();
+  try {
+    str = decodeURIComponent(str);
+  } catch {}
+  str = str.replace(/^ipfs:\/\//i, '').trim();
+  return str.split('?')[0].split('/')[0].trim();
+}
+
+export function parseDataUrl(dataUrl) {
   if (!dataUrl || typeof dataUrl !== 'string') return null;
+  const commaIdx = dataUrl.indexOf(',');
+  if (commaIdx > -1 && dataUrl.startsWith('data:')) {
+    const meta = dataUrl.slice(5, commaIdx);
+    const mimeType = meta.split(';')[0].trim() || 'application/pdf';
+    const base64Data = dataUrl.slice(commaIdx + 1).trim();
+    try {
+      const buffer = Buffer.from(base64Data, 'base64');
+      return { buffer, mimeType };
+    } catch {
+      return null;
+    }
+  }
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (match) {
     try {
@@ -150,7 +172,7 @@ function parseDataUrl(dataUrl) {
 
 export async function saveReceipt(cid, fileName, dataUrl) {
   if (!cid || !dataUrl) return false;
-  const cleanCid = cid.replace(/^ipfs:\/\//, '').trim();
+  const cleanCid = normalizeCid(cid);
   const parsed = parseDataUrl(dataUrl);
   if (!parsed) return false;
 
@@ -200,7 +222,7 @@ export async function saveReceipt(cid, fileName, dataUrl) {
 
 export async function getReceipt(cid) {
   if (!cid) return null;
-  const cleanCid = cid.replace(/^ipfs:\/\//, '').trim();
+  const cleanCid = normalizeCid(cid);
 
   // 1. Check in-memory map
   const inMem = globalThis.__fairshare_receipts.get(cleanCid);
@@ -275,7 +297,7 @@ export async function getReceipt(cid) {
     if (state && Array.isArray(state.expenses)) {
       const matching = state.expenses.find(e => {
         if (!e) return false;
-        const expCid = (e.ipfsCid || '').replace(/^ipfs:\/\//, '').trim();
+        const expCid = normalizeCid(e.ipfsCid);
         const expHash = (e.receiptHash || '').toLowerCase();
         return (expCid === cleanCid || expHash === cleanCid.toLowerCase()) && e.receiptDataUrl;
       });
