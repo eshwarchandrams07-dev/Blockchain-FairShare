@@ -94,6 +94,13 @@ class LiveSyncService {
   initWebSocket() {
     if (typeof window === 'undefined') return;
 
+    // Vercel serverless environments do not support persistent WebSockets; HTTP polling & BroadcastChannel handle live sync seamlessly
+    const isVercel = window.location.hostname.endsWith('.vercel.app') || window.location.hostname.includes('vercel.app');
+    if (isVercel) {
+      this.status = this.broadcastChannel ? 'LOCAL_ONLY' : 'DISCONNECTED';
+      return;
+    }
+
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/fairshare-sync`;

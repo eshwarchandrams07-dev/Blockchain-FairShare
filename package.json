@@ -13,6 +13,7 @@
     "test:frontend": "node scripts/test-frontend-services.js",
     "test:ipfs": "node scripts/test-ipfs-integrity.js",
     "test:dispute": "node scripts/test-dispute-arbitration.js",
+    "test:vercel": "node scripts/test-vercel-endpoints.js",
     "deploy:base-sepolia": "node scripts/deploy.js --network base-sepolia",
     "deploy:polygon-amoy": "node scripts/deploy.js --network polygon-amoy",
     "lint": "oxlint",

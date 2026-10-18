@@ -1,4 +1,5 @@
 // Multi-Backend Permanent Storage Engine for FairShare on Vercel & Node.js
+import { saveReceipt } from './_store.js';
 
 let inMemoryCachedState = null;
 let lastSavedTimestamp = Date.now();
@@ -351,6 +352,15 @@ export default async function handler(req, res) {
         const currentPersisted = (await loadPersistedState(adapter)) || inMemoryCachedState;
         inMemoryCachedState = mergeLedgerStates(currentPersisted, incomingState);
         lastSavedTimestamp = Date.now();
+
+        // Extract and cache any attached receipts for immediate IPFS resolution
+        if (Array.isArray(inMemoryCachedState.expenses)) {
+          for (const exp of inMemoryCachedState.expenses) {
+            if (exp?.ipfsCid && exp?.receiptDataUrl) {
+              saveReceipt(exp.ipfsCid, exp.receiptFileName, exp.receiptDataUrl).catch(() => {});
+            }
+          }
+        }
 
         // Write to permanent cloud database if configured
         if (adapter.isPermanent) {

@@ -939,7 +939,7 @@ export default function App() {
                   const dataFallback = inspectReceiptData.receiptDataUrl || 
                                        ipfsService.getLocalPreviewUrl(inspectReceiptData.ipfsCid) || 
                                        (cidClean ? `/api/receipts/${cidClean}` : null);
-                  const previewUrl = ipfsUrl || dataFallback;
+                  const previewUrl = dataFallback || ipfsUrl;
                   const fileName = inspectReceiptData.receiptFileName || 'receipt.pdf';
                   const isImage = (dataFallback && dataFallback.startsWith('data:image/')) || /\.(png|jpe?g|webp|gif|svg)$/i.test(fileName);
                   const isPdf = (dataFallback && dataFallback.startsWith('data:application/pdf')) || /\.pdf$/i.test(fileName);

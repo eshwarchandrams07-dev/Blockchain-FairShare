@@ -1,8 +1,48 @@
 {
   "rewrites": [
     {
+      "source": "/ipfs/:cid*",
+      "destination": "/api/ipfs?cid=:cid*"
+    },
+    {
+      "source": "/api/receipts/:cid*",
+      "destination": "/api/ipfs?cid=:cid*"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/ipfs/(.*)",
+      "headers": [
+        {
+          "key": "Content-Disposition",
+          "value": "inline"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, OPTIONS, HEAD, PUT, DELETE"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization, apikey"
+        }
+      ]
     }
   ]
 }
