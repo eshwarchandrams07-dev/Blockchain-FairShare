@@ -2480,7 +2480,28 @@ class BlockchainStateService {
           return {
             valid: false,
             tamperedBlock: curr.blockNumber,
-            reason: `Broken cryptographic hash pointer at Block #${curr.blockNumber}`,
+            reason: `Broken cryptographic hash pointer at Block #${curr.blockNumber} (Expected previous: ${prev.blockHash.slice(0, 10)}..., Found: ${curr.previousBlockHash.slice(0, 10)}...)`,
+          };
+        }
+      }
+
+      // Verify payload Keccak-256 integrity (non-genesis blocks)
+      if (
+        curr.previousBlockHash && 
+        curr.previousBlockHash !== '0x0000000000000000000000000000000000000000000000000000000000000000' &&
+        curr.blockHash && 
+        curr.id
+      ) {
+        const expectedHash = ethers.keccak256(
+          ethers.toUtf8Bytes(
+            `${curr.previousBlockHash}:${curr.blockNumber}:${curr.groupId}:${curr.action}:${curr.actor}:${curr.details}:${curr.timestamp}:${curr.id}`
+          )
+        );
+        if (curr.blockHash !== expectedHash) {
+          return {
+            valid: false,
+            tamperedBlock: curr.blockNumber,
+            reason: `Data Tampering Detected at Block #${curr.blockNumber}: Block content does not match its Keccak-256 cryptographic digest!`,
           };
         }
       }

@@ -12,7 +12,8 @@ import {
   FileDown,
   Printer,
   X,
-  RotateCcw
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
 import { shortenAddress } from '../utils/cryptoUtils';
 import { blockchainService } from '../services/blockchainState';
@@ -46,6 +47,8 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
   const [isCertificateModalOpen, setIsCertificateModalOpen] = useState(false);
   const [certDate, setCertDate] = useState('');
   const [verificationResult, setVerificationResult] = useState(null);
+  const [isTampered, setIsTampered] = useState(false);
+  const [originalLogBackup, setOriginalLogBackup] = useState(null);
 
   if (!currentGroup) {
     return (
@@ -64,6 +67,42 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
     setTimeout(() => {
       setVerificationResult(null);
     }, 6000);
+  };
+
+  const handleToggleTamper = () => {
+    if (!isTampered) {
+      // Find the latest block for this group and corrupt its previousBlockHash
+      const log = blockchainService.auditLogs.find(
+        l => l && Number(l.groupId) === Number(currentGroup.id) && l.previousBlockHash && l.previousBlockHash.startsWith('0x')
+      );
+      if (log) {
+        setOriginalLogBackup({
+          id: log.id,
+          previousBlockHash: log.previousBlockHash,
+          details: log.details,
+          blockNumber: log.blockNumber,
+        });
+        log.previousBlockHash = '0x9999' + log.previousBlockHash.slice(6);
+        setIsTampered(true);
+        // Automatically run verification to trigger the red alert immediately!
+        const res = blockchainService.verifyLedgerIntegrity(currentGroup.id);
+        setVerificationResult(res);
+      }
+    } else {
+      // Restore the original log
+      if (originalLogBackup) {
+        const log = blockchainService.auditLogs.find(l => l && l.id === originalLogBackup.id);
+        if (log) {
+          log.previousBlockHash = originalLogBackup.previousBlockHash;
+          log.details = originalLogBackup.details;
+        }
+      }
+      setIsTampered(false);
+      setOriginalLogBackup(null);
+      const res = blockchainService.verifyLedgerIntegrity(currentGroup.id);
+      setVerificationResult(res);
+      setTimeout(() => setVerificationResult(null), 5000);
+    }
   };
 
   const handleOpenCertificate = () => {
@@ -167,6 +206,25 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
             >
               <ShieldCheck size={14} style={{ color: 'var(--color-emerald-light)' }} />
               <span>Verify Hash Chain</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={handleToggleTamper}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                border: isTampered ? '1px solid var(--color-rose)' : '1px solid rgba(239, 68, 68, 0.4)',
+                color: isTampered ? '#fff' : 'var(--color-rose-light)',
+                background: isTampered ? 'var(--color-rose)' : 'rgba(239, 68, 68, 0.08)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              title="Intentionally tamper with a block's cryptographic hash to test detection"
+            >
+              {isTampered ? <RotateCcw size={14} /> : <AlertTriangle size={14} />}
+              <span>{isTampered ? 'Restore Untampered Chain' : 'Test Tamper Attack'}</span>
             </button>
             <button
               type="button"
