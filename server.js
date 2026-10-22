@@ -282,6 +282,36 @@ const server = http.createServer((req, res) => {
         }
       }));
       return;
+    } else if (req.method === 'DELETE') {
+      cachedLedgerState = {
+        groups: [{
+          id: 1,
+          name: 'Public Ledger',
+          isPrivate: false,
+          ledgerId: 'PUB-101',
+          password: '',
+          inviteCode: 'PUBLIC',
+          currency: '₹',
+          description: 'Decentralized public expense ledger. Open for community expense sharing and multi-device settlement.',
+          creator: '0x0000000000000000000000000000000000000000',
+          createdAt: Date.now(),
+          members: [],
+          approvalPolicy: 1,
+        }],
+        expenses: [],
+        settlements: [],
+        auditLogs: [],
+        currentGroupId: 1,
+        currentBlockNumber: 19843600,
+      };
+      persistStateToDisk(cachedLedgerState);
+      try {
+        const files = fs.readdirSync(RECEIPTS_DIR);
+        for (const f of files) fs.unlinkSync(path.join(RECEIPTS_DIR, f));
+      } catch {}
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, message: 'All ledger data deleted successfully' }));
+      return;
     } else if (req.method === 'POST') {
       let body = '';
       req.on('data', chunk => { body += chunk; });
@@ -289,7 +319,34 @@ const server = http.createServer((req, res) => {
         try {
           const parsed = JSON.parse(body);
           const incomingState = parsed.state || parsed;
-          if (incomingState && (incomingState.groups || incomingState.expenses || incomingState.settlements || incomingState.auditLogs || incomingState.state)) {
+          if (parsed.isReset || incomingState.isReset) {
+            cachedLedgerState = {
+              groups: [{
+                id: 1,
+                name: 'Public Ledger',
+                isPrivate: false,
+                ledgerId: 'PUB-101',
+                password: '',
+                inviteCode: 'PUBLIC',
+                currency: '₹',
+                description: 'Decentralized public expense ledger. Open for community expense sharing and multi-device settlement.',
+                creator: '0x0000000000000000000000000000000000000000',
+                createdAt: Date.now(),
+                members: [],
+                approvalPolicy: 1,
+              }],
+              expenses: [],
+              settlements: [],
+              auditLogs: [],
+              currentGroupId: 1,
+              currentBlockNumber: 19843600,
+            };
+            persistStateToDisk(cachedLedgerState);
+            try {
+              const files = fs.readdirSync(RECEIPTS_DIR);
+              for (const f of files) fs.unlinkSync(path.join(RECEIPTS_DIR, f));
+            } catch {}
+          } else if (incomingState && (incomingState.groups || incomingState.expenses || incomingState.settlements || incomingState.auditLogs || incomingState.state)) {
             cachedLedgerState = mergeLedgerStates(cachedLedgerState, incomingState);
             persistStateToDisk(cachedLedgerState);
           }

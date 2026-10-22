@@ -2,15 +2,16 @@
   "network": "base-sepolia",
   "networkName": "Base Sepolia (Testnet)",
   "chainId": 84532,
-  "deployedAt": null,
+  "deployedAt": "2026-10-22T19:08:10.693Z",
+  "deployer": "0x6c444fAfCC757ed946EBa9548EBB5844816fA7c8",
   "contracts": {
     "FairShare": {
-      "address": "0x0000000000000000000000000000000000000000",
-      "explorerUrl": "https://sepolia.basescan.org"
+      "address": "0xA1A80e77189cBc0Ec383429740C277b483949d36",
+      "explorerUrl": "https://sepolia.basescan.org/address/0xA1A80e77189cBc0Ec383429740C277b483949d36"
     },
     "MockERC20": {
-      "address": "0x0000000000000000000000000000000000000000",
-      "explorerUrl": "https://sepolia.basescan.org"
+      "address": "0xb6f8A652ef67f28821f974A6b0415b9C881D9935",
+      "explorerUrl": "https://sepolia.basescan.org/address/0xb6f8A652ef67f28821f974A6b0415b9C881D9935"
     }
   }
 }

@@ -268,7 +268,34 @@ function setupWebSocketRelay(server) {
       const msgStr = message.toString()
       try {
         const parsed = JSON.parse(msgStr)
-        if (parsed.type === 'STATE_UPDATED' && parsed.state) {
+        if (parsed.type === 'RESET_LEDGER' || (parsed.type === 'STATE_UPDATED' && parsed.isReset)) {
+          cachedLedgerState = {
+            groups: [{
+              id: 1,
+              name: 'Public Ledger',
+              isPrivate: false,
+              ledgerId: 'PUB-101',
+              password: '',
+              inviteCode: 'PUBLIC',
+              currency: '₹',
+              description: 'Decentralized public expense ledger. Open for community expense sharing and multi-device settlement.',
+              creator: '0x0000000000000000000000000000000000000000',
+              createdAt: Date.now(),
+              members: [],
+              approvalPolicy: 1,
+            }],
+            expenses: [],
+            settlements: [],
+            auditLogs: [],
+            currentGroupId: 1,
+            currentBlockNumber: 19843600,
+          }
+          persistStateToDisk(cachedLedgerState)
+          try {
+            const files = fs.readdirSync(RECEIPTS_DIR)
+            for (const f of files) fs.unlinkSync(path.join(RECEIPTS_DIR, f))
+          } catch {}
+        } else if (parsed.type === 'STATE_UPDATED' && parsed.state) {
           cachedLedgerState = mergeLedgerStates(cachedLedgerState, parsed.state)
           persistStateToDisk(cachedLedgerState)
         } else if (parsed.type === 'REQUEST_SYNC' && cachedLedgerState) {
@@ -295,12 +322,44 @@ function setupWebSocketRelay(server) {
 
 function handleStateEndpoint(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204
     res.end()
+    return
+  }
+
+  if (req.method === 'DELETE') {
+    cachedLedgerState = {
+      groups: [{
+        id: 1,
+        name: 'Public Ledger',
+        isPrivate: false,
+        ledgerId: 'PUB-101',
+        password: '',
+        inviteCode: 'PUBLIC',
+        currency: '₹',
+        description: 'Decentralized public expense ledger. Open for community expense sharing and multi-device settlement.',
+        creator: '0x0000000000000000000000000000000000000000',
+        createdAt: Date.now(),
+        members: [],
+        approvalPolicy: 1,
+      }],
+      expenses: [],
+      settlements: [],
+      auditLogs: [],
+      currentGroupId: 1,
+      currentBlockNumber: 19843600,
+    }
+    persistStateToDisk(cachedLedgerState)
+    try {
+      const files = fs.readdirSync(RECEIPTS_DIR)
+      for (const f of files) fs.unlinkSync(path.join(RECEIPTS_DIR, f))
+    } catch {}
+    res.setHeader('Content-Type', 'application/json')
+    res.end(JSON.stringify({ success: true, message: 'All ledger data deleted successfully' }))
     return
   }
 
@@ -322,7 +381,34 @@ function handleStateEndpoint(req, res) {
       try {
         const parsed = JSON.parse(body)
         const incomingState = parsed.state || parsed
-        if (incomingState && (incomingState.groups || incomingState.expenses || incomingState.settlements || incomingState.auditLogs || incomingState.state)) {
+        if (parsed.isReset || incomingState.isReset) {
+          cachedLedgerState = {
+            groups: [{
+              id: 1,
+              name: 'Public Ledger',
+              isPrivate: false,
+              ledgerId: 'PUB-101',
+              password: '',
+              inviteCode: 'PUBLIC',
+              currency: '₹',
+              description: 'Decentralized public expense ledger. Open for community expense sharing and multi-device settlement.',
+              creator: '0x0000000000000000000000000000000000000000',
+              createdAt: Date.now(),
+              members: [],
+              approvalPolicy: 1,
+            }],
+            expenses: [],
+            settlements: [],
+            auditLogs: [],
+            currentGroupId: 1,
+            currentBlockNumber: 19843600,
+          }
+          persistStateToDisk(cachedLedgerState)
+          try {
+            const files = fs.readdirSync(RECEIPTS_DIR)
+            for (const f of files) fs.unlinkSync(path.join(RECEIPTS_DIR, f))
+          } catch {}
+        } else if (incomingState && (incomingState.groups || incomingState.expenses || incomingState.settlements || incomingState.auditLogs || incomingState.state)) {
           cachedLedgerState = mergeLedgerStates(cachedLedgerState, incomingState)
           persistStateToDisk(cachedLedgerState)
         }

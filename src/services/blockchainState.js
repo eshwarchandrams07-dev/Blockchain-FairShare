@@ -120,8 +120,10 @@ export function getDeviceProfile() {
 
 class BlockchainStateService {
   constructor() {
-    this.storageKey = 'fairshare_blockchain_v6_publicledger';
+    this.storageKey = 'fairshare_blockchain_v8_publicledger';
     try {
+      localStorage.removeItem('fairshare_blockchain_v7_publicledger');
+      localStorage.removeItem('fairshare_blockchain_v6_publicledger');
       localStorage.removeItem('fairshare_blockchain_v5_publicledger');
       localStorage.removeItem('fairshare_blockchain_v4_openstate');
       localStorage.removeItem('fairshare_blockchain_state_v3');
@@ -284,25 +286,8 @@ class BlockchainStateService {
     );
 
     if (!existing) {
-      const hasAdmin = publicGroup.members.some(m => m.role === 'ADMIN');
-      const isFirst = publicGroup.members.length === 0 || !hasAdmin;
-      const newMember = {
-        address: this.myProfile.address,
-        name: this.myProfile.name,
-        email: this.myProfile.email,
-        role: isFirst ? 'ADMIN' : 'MEMBER',
-        avatar: isFirst ? '👑' : (this.myProfile.avatar || '👤'),
-        pin: this.myProfile.pin || '1234',
-        upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-        tokenBalance: this.myProfile.tokenBalance || 75000,
-        provider: 'google',
-        joinedAt: Date.now(),
-      };
-      publicGroup.members.push(newMember);
-      if (isFirst) {
-        publicGroup.creator = newMember.address;
-      }
-      this.saveState(true);
+      // Do not auto-join; user joins explicitly via the "Join and Continue" banner
+      return;
     } else {
       if (!publicGroup.members.some(m => m.role === 'ADMIN')) {
         existing.role = 'ADMIN';
@@ -319,6 +304,20 @@ class BlockchainStateService {
 
   mergeRemoteState(remoteState) {
     if (!remoteState || !Array.isArray(remoteState.groups)) return false;
+
+    if (remoteState.isReset || (remoteState.groups?.length === 1 && (!remoteState.expenses || remoteState.expenses.length === 0) && (!remoteState.auditLogs || remoteState.auditLogs.length === 0) && (!remoteState.groups[0]?.members || remoteState.groups[0].members.length === 0))) {
+      this.groups = remoteState.groups.map(g => ({ ...g, members: this.sanitizeGoogleMembers(g.members || []) }));
+      this.expenses = [];
+      this.settlements = [];
+      this.auditLogs = [];
+      this.currentGroupId = 1;
+      this.unlockedGroupIds = [1];
+      this.saveUnlockedGroups();
+      this.saveState(true);
+      this.notifyListeners();
+      return true;
+    }
+
     if (!Array.isArray(this.groups)) this.groups = [];
     if (!Array.isArray(this.expenses)) this.expenses = [];
     if (!Array.isArray(this.settlements)) this.settlements = [];
@@ -746,7 +745,7 @@ class BlockchainStateService {
     return this.joinActiveGroupAsDeviceUser();
   }
 
-  saveState(skipBroadcast = false) {
+  saveState(skipBroadcast = false, isReset = false) {
     try {
       const state = {
         groups: this.groups,
@@ -765,6 +764,7 @@ class BlockchainStateService {
         liveSync.broadcast({
           type: 'STATE_UPDATED',
           state,
+          isReset,
         });
       }
     } catch (e) {
@@ -801,13 +801,11 @@ class BlockchainStateService {
   }
 
   resetToDefaults() {
-    const isGoogleUser = Boolean(
-      this.myProfile &&
-      this.myProfile.address &&
-      this.myProfile.email &&
-      this.myProfile.email.includes('@') &&
-      this.myProfile.provider === 'google'
-    );
+    if (typeof window !== 'undefined') {
+      try {
+        fetch('/api/ledger-state', { method: 'DELETE' }).catch(() => {});
+      } catch {}
+    }
 
     this.groups = [
       {
@@ -819,21 +817,10 @@ class BlockchainStateService {
         inviteCode: "PUBLIC",
         currency: "₹",
         description: "Decentralized public expense ledger. Open for community expense sharing and multi-device settlement.",
-        creator: isGoogleUser ? this.myProfile.address : "0x0000000000000000000000000000000000000000",
+        creator: "0x0000000000000000000000000000000000000000",
         createdAt: Date.now(),
         approvalPolicy: APPROVAL_POLICIES.MAJORITY_VOTE,
-        members: isGoogleUser ? [{
-          address: this.myProfile.address,
-          name: this.myProfile.name,
-          email: this.myProfile.email,
-          role: 'ADMIN',
-          avatar: this.myProfile.avatar || '👑',
-          pin: this.myProfile.pin || '1234',
-          upiId: this.myProfile.upiId || `${this.myProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@upi`,
-          tokenBalance: this.myProfile.tokenBalance || 75000,
-          provider: 'google',
-          joinedAt: Date.now(),
-        }] : [],
+        members: [],
       }
     ];
 
@@ -845,7 +832,7 @@ class BlockchainStateService {
 
     this.unlockedGroupIds = [1];
     this.saveUnlockedGroups();
-    this.saveState();
+    this.saveState(false, true);
   }
 
   subscribe(listener) {

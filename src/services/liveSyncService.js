@@ -197,11 +197,15 @@ class LiveSyncService {
     // 3. Backup to server memory state endpoint
     if (payload.type === 'STATE_UPDATED' && payload.state && typeof window !== 'undefined') {
       try {
-        fetch('/api/ledger-state', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        }).catch(() => {});
+        if (payload.isReset) {
+          fetch('/api/ledger-state', { method: 'DELETE' }).catch(() => {});
+        } else {
+          fetch('/api/ledger-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }).catch(() => {});
+        }
       } catch {}
     }
   }

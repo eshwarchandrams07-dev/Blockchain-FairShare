@@ -326,6 +326,35 @@ export default async function handler(req, res) {
 
   const adapter = getPersistenceAdapter();
 
+  if (req.method === 'DELETE') {
+    inMemoryCachedState = {
+      groups: [{
+        id: 1,
+        name: 'Public Ledger',
+        isPrivate: false,
+        ledgerId: 'PUB-101',
+        password: '',
+        inviteCode: 'PUBLIC',
+        currency: '₹',
+        description: 'Decentralized public expense ledger. Open for community expense sharing and multi-device settlement.',
+        creator: '0x0000000000000000000000000000000000000000',
+        createdAt: Date.now(),
+        members: [],
+        approvalPolicy: 1,
+      }],
+      expenses: [],
+      settlements: [],
+      auditLogs: [],
+      currentGroupId: 1,
+      currentBlockNumber: 19843600,
+    };
+    lastSavedTimestamp = Date.now();
+    if (adapter.isPermanent) {
+      await savePersistedState(adapter, inMemoryCachedState);
+    }
+    return res.status(200).json({ success: true, message: 'All ledger data deleted successfully' });
+  }
+
   if (req.method === 'GET') {
     const persisted = await loadPersistedState(adapter);
     if (persisted) {
