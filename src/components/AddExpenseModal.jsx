@@ -67,9 +67,11 @@ function AddExpenseModalContent({
   const [isHashing, setIsHashing] = useState(false);
 
   const toggleParticipant = (addr) => {
-    if (selectedParticipants.includes(addr)) {
+    if (!addr) return;
+    const exists = selectedParticipants.some(a => a.toLowerCase() === addr.toLowerCase());
+    if (exists) {
       if (selectedParticipants.length <= 1) return; // Keep at least one
-      setSelectedParticipants(selectedParticipants.filter(a => a !== addr));
+      setSelectedParticipants(selectedParticipants.filter(a => a.toLowerCase() !== addr.toLowerCase()));
     } else {
       setSelectedParticipants([...selectedParticipants, addr]);
     }
@@ -148,8 +150,8 @@ function AddExpenseModalContent({
         const pct = parseFloat(customPercentages[addr] || '0') / 100;
         let shareAmt = Math.round(totalCents * pct);
 
-        // If total percentages equal 100%, eliminate any 1-paise rounding discrepancies on the last participant
-        if (idx === selectedParticipants.length - 1 && Math.abs(sumPct - 100) < 0.1) {
+        // If total percentages equal ~100%, eliminate any 1-paise rounding discrepancies on the last participant
+        if (idx === selectedParticipants.length - 1 && Math.abs(sumPct - 100) < 0.15) {
           shareAmt = Math.max(0, totalCents - allocatedCents);
         } else {
           allocatedCents += shareAmt;
@@ -245,10 +247,10 @@ function AddExpenseModalContent({
       return;
     }
 
-    // Percentage check
+    // Percentage check (with tolerance for floating point rounding discrepancies)
     if (splitType === SPLIT_TYPES.PERCENTAGE) {
       const sumPct = selectedParticipants.reduce((sum, a) => sum + (parseFloat(customPercentages[a]) || 0), 0);
-      if (Math.abs(sumPct - 100) > 0.1) {
+      if (Math.abs(sumPct - 100) > 0.15) {
         setError(`Sum of percentages (${sumPct.toFixed(1)}%) must equal exactly 100%. Difference: ${Math.abs(sumPct - 100).toFixed(1)}%`);
         return;
       }

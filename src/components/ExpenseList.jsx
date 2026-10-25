@@ -14,7 +14,7 @@ import {
   Globe
 } from 'lucide-react';
 import { formatCents, shortenAddress } from '../utils/cryptoUtils';
-import { STATUS_LABELS, EXPENSE_STATUS } from '../services/blockchainState';
+import { STATUS_LABELS, EXPENSE_STATUS, blockchainService } from '../services/blockchainState';
 import ConsensusBlock from './ConsensusBlock';
 
 export default function ExpenseList({
@@ -38,7 +38,7 @@ export default function ExpenseList({
   };
 
   // Filter expenses for current group
-  const groupExpenses = (expenses || []).filter(e => e && currentGroup && e.groupId === currentGroup.id);
+  const groupExpenses = (expenses || []).filter(e => e && currentGroup && String(e.groupId) === String(currentGroup.id));
 
   // Available categories in this group
   const availableCategories = Array.from(new Set(groupExpenses.map(e => e.category).filter(Boolean)));
@@ -47,7 +47,12 @@ export default function ExpenseList({
   const approvedExpenses = groupExpenses.filter(e => e.status === EXPENSE_STATUS.APPROVED);
   const totalApprovedAmount = approvedExpenses.reduce((sum, e) => sum + (e.totalAmount || 0), 0);
   const myTotalShare = approvedExpenses.reduce((sum, e) => {
-    const s = (e.shares || []).find(sh => sh?.participant && currentAccount && sh.participant.toLowerCase() === currentAccount.toLowerCase());
+    const myProfile = blockchainService.getMyProfile();
+    const myName = (myProfile?.name || '').toLowerCase();
+    const s = (e.shares || []).find(sh => 
+      (sh?.participant && currentAccount && sh.participant.toLowerCase() === currentAccount.toLowerCase()) ||
+      (myName && sh?.name && sh.name.toLowerCase() === myName)
+    );
     return sum + (s ? s.amount : 0);
   }, 0);
 
@@ -303,13 +308,21 @@ export default function ExpenseList({
         </div>
       ) : (
         displayedExpenses.map(exp => {
+          const myProfile = blockchainService.getMyProfile();
+          const myName = (myProfile?.name || '').toLowerCase();
           const isPayer = (exp.payer || '').toLowerCase() === (currentAccount || '').toLowerCase();
           const isPending = exp.status === EXPENSE_STATUS.PENDING_APPROVAL;
           const isApproved = exp.status === EXPENSE_STATUS.APPROVED;
           const isDisputed = exp.status === EXPENSE_STATUS.DISPUTED;
           const isCorrected = exp.status === EXPENSE_STATUS.CORRECTED;
-          const myVote = exp.votes?.find(v => (v?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase());
-          const myShare = exp.shares?.find(s => (s?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase());
+          const myVote = exp.votes?.find(v => 
+            (v?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase() ||
+            (myName && v?.name && v.name.toLowerCase() === myName)
+          );
+          const myShare = exp.shares?.find(s => 
+            (s?.participant || '').toLowerCase() === (currentAccount || '').toLowerCase() ||
+            (myName && s?.name && s.name.toLowerCase() === myName)
+          );
           const canVote = isPending && myShare && (!myVote || myVote.status === 'PENDING');
 
           // Status Badge Class
@@ -331,6 +344,20 @@ export default function ExpenseList({
                     <span className={`badge ${statusBadgeClass}`}>
                       {STATUS_LABELS[exp.status]}
                     </span>
+                    {canVote && (
+                      <span 
+                        className="badge" 
+                        style={{ 
+                          fontSize: '10px', 
+                          background: 'rgba(245, 158, 11, 0.15)', 
+                          color: '#b45309', 
+                          border: '1px solid rgba(245, 158, 11, 0.3)',
+                          fontWeight: 700 
+                        }}
+                      >
+                        ⚡ Your Signature Needed
+                      </span>
+                    )}
                     <span className="badge badge-neutral" style={{ fontSize: '11px' }}>
                       {exp.category}
                     </span>

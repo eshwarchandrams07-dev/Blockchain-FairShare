@@ -28,7 +28,6 @@ function ProfileModalContent({
   const [name, setName] = useState(currentProfile?.name || '');
   const [avatar, setAvatar] = useState(currentProfile?.avatar || '👤');
   const [pin, setPin] = useState(currentProfile?.pin || '1234');
-  const [upiId, setUpiId] = useState(currentProfile?.upiId || '');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
@@ -57,7 +56,6 @@ function ProfileModalContent({
       name: name.trim(),
       avatar,
       pin: pin.trim(),
-      upiId: upiId.trim() || undefined,
     });
 
     onClose();
@@ -251,31 +249,6 @@ function ProfileModalContent({
             </div>
           </div>
 
-          {/* Receiving UPI ID for Real Payments */}
-          <div style={{ marginBottom: '18px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Your Receiving UPI ID / VPA
-              </label>
-              <span style={{ fontSize: '11px', color: 'var(--color-cyan)', fontWeight: 600 }}>
-                For GPay / PhonePe settlements
-              </span>
-            </div>
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                className="form-input mono"
-                placeholder="e.g. rahul@oksbi or yourname@paytm"
-                value={upiId}
-                onChange={e => setUpiId(e.target.value)}
-                maxLength={45}
-                style={{ width: '100%', padding: '12px 14px', fontSize: '14px' }}
-              />
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
-              Roommates scanning your settlement QR code will send money directly to this UPI address.
-            </div>
-          </div>
 
           {/* Wallet Address Information */}
           <div style={{ 

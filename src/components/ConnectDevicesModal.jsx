@@ -166,7 +166,7 @@ export default function ConnectDevicesModal({
                 Multi-Device Wi-Fi Relay Ready
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                Devices on same Wi-Fi instantly sync expenses, UPI settlements & votes in real-time.
+                Devices on same Wi-Fi instantly sync expenses, on-chain settlements & votes in real-time.
               </div>
             </div>
           </div>

@@ -11,7 +11,7 @@ import {
   Check
 } from 'lucide-react';
 import { formatCents, shortenAddress } from '../utils/cryptoUtils';
-import { POLICY_LABELS } from '../services/blockchainState';
+import { POLICY_LABELS, blockchainService } from '../services/blockchainState';
 
 export default function ConsensusBlock({
   expense,
@@ -205,11 +205,19 @@ export default function ConsensusBlock({
       {/* Participant Consensus Roster Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px', marginBottom: '14px' }}>
         {votes.map((v) => {
-          const isCurrentActiveUser = Boolean(
+          const myProfile = blockchainService.getMyProfile();
+          const directMatch = Boolean(
             v?.participant && 
             currentAccount && 
             v.participant.toLowerCase() === currentAccount.toLowerCase()
           );
+          const nameMatch = Boolean(
+            !directMatch &&
+            v?.name &&
+            myProfile?.name &&
+            v.name.toLowerCase() === myProfile.name.toLowerCase()
+          );
+          const isCurrentActiveUser = directMatch || nameMatch;
           const isAgreed = v.status === 'AGREED';
           const isRejectedVote = v.status === 'REJECTED';
           const isPendingVote = v.status === 'PENDING';
@@ -293,7 +301,14 @@ export default function ConsensusBlock({
                   <button 
                     className="btn btn-success btn-sm"
                     style={{ flex: 1, padding: '5px 8px', fontSize: '12px' }}
-                    onClick={() => onOpenSignModal && onOpenSignModal({ expense, voter: { ...v, address: v.participant }, initialAgreed: true })}
+                    onClick={() => onOpenSignModal && onOpenSignModal({ 
+                      expense, 
+                      voter: { 
+                        ...v, 
+                        address: (directMatch ? v.participant : myProfile?.address) || v.participant 
+                      }, 
+                      initialAgreed: true 
+                    })}
                     title="Enter your secret PIN to sign agreement to this payment"
                   >
                     <CheckCircle2 size={13} />
@@ -302,7 +317,14 @@ export default function ConsensusBlock({
                   <button 
                     className="btn btn-outline-danger btn-sm"
                     style={{ flex: 1, padding: '5px 8px', fontSize: '12px' }}
-                    onClick={() => onOpenSignModal && onOpenSignModal({ expense, voter: { ...v, address: v.participant }, initialAgreed: false })}
+                    onClick={() => onOpenSignModal && onOpenSignModal({ 
+                      expense, 
+                      voter: { 
+                        ...v, 
+                        address: (directMatch ? v.participant : myProfile?.address) || v.participant 
+                      }, 
+                      initialAgreed: false 
+                    })}
                     title="Enter objection reason and PIN to reject this payment"
                   >
                     <XCircle size={13} />

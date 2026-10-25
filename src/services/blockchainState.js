@@ -395,7 +395,7 @@ class BlockchainStateService {
 
       for (const re of remoteState.expenses) {
         if (!re || !re.id) continue;
-        if (re.payerName === 'Priya Sharma' || re.title === 'Wifi' || re.title === 'Veggis') continue;
+        if (re.payerName === 'Priya Sharma') continue;
 
         const existing = expMap.get(String(re.id));
         if (!existing) {
@@ -615,10 +615,10 @@ class BlockchainStateService {
           }
         });
 
-        // Purge mock demo expenses
+        // Purge mock demo persona expenses
         this.expenses = this.expenses.filter(e => {
           if (!e) return false;
-          if (e.payerName === 'Priya Sharma' || e.title === 'Wifi' || e.title === 'Veggis') return false;
+          if (e.payerName === 'Priya Sharma') return false;
           return true;
         });
 
@@ -933,17 +933,18 @@ class BlockchainStateService {
 
     // Also update in all expenses where this member is payer or participant
     this.expenses.forEach(exp => {
-      if ((exp.paidBy || '').toLowerCase() === myAddr && name) {
+      if (((exp.payer || exp.paidBy || '').toLowerCase() === myAddr) && name) {
+        exp.payerName = name;
         exp.paidByName = name;
       }
-      exp.participants?.forEach(pt => {
-        if ((pt?.address || '').toLowerCase() === myAddr && name) {
-          pt.name = name;
+      exp.shares?.forEach(sh => {
+        if ((sh?.participant || '').toLowerCase() === myAddr && name) {
+          sh.name = name;
         }
       });
-      exp.signatures?.forEach(sig => {
-        if ((sig?.voter || '').toLowerCase() === myAddr && name) {
-          sig.voterName = name;
+      exp.votes?.forEach(v => {
+        if ((v?.participant || '').toLowerCase() === myAddr && name) {
+          v.name = name;
         }
       });
     });
@@ -1900,7 +1901,7 @@ class BlockchainStateService {
     if (!isMyDevice) {
       throw new Error(`Device Security Violation: This device can only sign votes for its own user account (${this.myProfile?.name || 'User'}). Each device has its own user.`);
     }
-    const expectedPin = this.myProfile?.pin;
+    const expectedPin = this.myProfile?.pin || '1234';
     const voterName = this.myProfile?.name || 'User';
 
     // ANTI-CHEAT SECURITY CHECK: Verify Voter PIN
@@ -1928,7 +1929,16 @@ class BlockchainStateService {
       });
     }
 
-    const voteItem = (exp.votes || []).find(v => v?.participant && voterAddress && v.participant.toLowerCase() === voterAddress.toLowerCase());
+    let voteItem = (exp.votes || []).find(v => v?.participant && voterAddress && v.participant.toLowerCase() === voterAddress.toLowerCase());
+    if (!voteItem && voterName) {
+      // Reconcile if participant has an updated/reconnected wallet address matching by name
+      voteItem = (exp.votes || []).find(v => v?.name && v.name.toLowerCase() === voterName.toLowerCase());
+      if (voteItem) {
+        voteItem.participant = voterAddress;
+        const sh = (exp.shares || []).find(s => s?.name && s.name.toLowerCase() === voterName.toLowerCase());
+        if (sh) sh.participant = voterAddress;
+      }
+    }
     if (!voteItem) {
       throw new Error(`Address ${voterAddress} is not a listed participant on Expense #${expenseId}`);
     }
@@ -2203,11 +2213,29 @@ class BlockchainStateService {
       initialStatus = EXPENSE_STATUS.APPROVED;
     }
 
+    // Preserve the original payer from the old expense — the corrector is NOT the payer
+    const originalPayer = oldExp.payer || this.currentAccount;
+    const originalPayerName = oldExp.payerName || oldExp.paidByName || profile.name;
+    const payerAddr = (originalPayer || '').toLowerCase();
+    const votes = (newExpenseData.shares || []).map(s => {
+      const isPayer = Boolean(payerAddr && (s.participant || '').toLowerCase() === payerAddr);
+      return {
+        participant: s.participant,
+        name: s.name,
+        amount: s.amount,
+        status: isPayer ? 'AGREED' : 'PENDING',
+        reason: isPayer ? 'Payer Submission' : '',
+        signature: isPayer ? generateTxHash() : null,
+        timestamp: isPayer ? Date.now() : null,
+        pinVerified: isPayer,
+      };
+    });
+
     const newExpense = {
       id: newId,
       groupId,
-      payer: this.currentAccount,
-      payerName: profile.name,
+      payer: originalPayer,
+      payerName: originalPayerName,
       title: newExpenseData.title,
       category: newExpenseData.category || oldExp.category,
       totalAmount: Number(newExpenseData.totalAmount),
@@ -2222,9 +2250,10 @@ class BlockchainStateService {
       notes: newExpenseData.notes || '',
       createdAt: Date.now(),
       previousExpenseId: oldExpenseId,
-      approvals: [this.currentAccount],
+      approvals: Array.from(new Set([originalPayer, this.currentAccount].filter(Boolean))),
       rejections: [],
       shares: newExpenseData.shares,
+      votes,
     };
 
     this.expenses.unshift(newExpense);

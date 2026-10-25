@@ -205,7 +205,8 @@ export function calculateRawPairwiseDebts(members = [], expenses = [], settlemen
     });
   });
 
-  const groupExpenses = expenses.filter(e => Number(e.groupId) === Number(groupId) && Number(e.status) === 1);
+  const matchesGroup = (id) => String(id) === String(groupId) || (!isNaN(Number(id)) && !isNaN(Number(groupId)) && Number(id) === Number(groupId));
+  const groupExpenses = expenses.filter(e => e && matchesGroup(e.groupId) && Number(e.status) === 1);
   for (const exp of groupExpenses) {
     const payer = (exp.payer || '').toLowerCase();
     for (const share of (exp.shares || [])) {
@@ -217,7 +218,7 @@ export function calculateRawPairwiseDebts(members = [], expenses = [], settlemen
     }
   }
 
-  const groupSettlements = settlements.filter(s => Number(s.groupId) === Number(groupId) && s.status === 'CONFIRMED');
+  const groupSettlements = settlements.filter(s => s && matchesGroup(s.groupId) && s.status === 'CONFIRMED');
   for (const st of groupSettlements) {
     const from = (st.from || '').toLowerCase();
     const to = (st.to || '').toLowerCase();

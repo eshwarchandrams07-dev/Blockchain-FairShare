@@ -7,7 +7,9 @@ import {
   XCircle, 
   AlertCircle,
   Lock,
-  Zap
+  Zap,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { formatCents, shortenAddress } from '../utils/cryptoUtils';
 import { blockchainService } from '../services/blockchainState';
@@ -27,6 +29,7 @@ function SignVoteModalContent({
   const [agreed, setAgreed] = useState(initialAgreed !== undefined ? initialAgreed : true);
   const [reason, setReason] = useState('');
   const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState('');
 
   // Normalize voter address (handles both voter.address and voter.participant)
@@ -35,19 +38,18 @@ function SignVoteModalContent({
   // Lookup device profile or member
   const myProfile = blockchainService.getMyProfile();
   const isMyDevice = Boolean(
-    voterAddress && 
-    myProfile?.address && 
-    voterAddress.toLowerCase() === myProfile.address.toLowerCase()
+    (voterAddress && myProfile?.address && voterAddress.toLowerCase() === myProfile.address.toLowerCase()) ||
+    (voter?.name && myProfile?.name && voter.name.toLowerCase() === myProfile.name.toLowerCase())
   );
+  const effectiveVoterAddress = (isMyDevice && myProfile?.address) ? myProfile.address : voterAddress;
   const expectedPin = isMyDevice ? (myProfile?.pin || '1234') : (voter?.pin || '1234');
   const voterName = isMyDevice ? (myProfile?.name || 'User') : (voter?.name || shortenAddress(voterAddress));
   const voterAvatar = isMyDevice ? (myProfile?.avatar || '👤') : (voter?.avatar || '👤');
 
   // Safe lookup for share amount
   const shareObj = (expense?.shares || []).find(s => 
-    s?.participant && 
-    voterAddress && 
-    s.participant.toLowerCase() === voterAddress.toLowerCase()
+    (s?.participant && effectiveVoterAddress && s.participant.toLowerCase() === effectiveVoterAddress.toLowerCase()) ||
+    (s?.name && voterName && s.name.toLowerCase() === voterName.toLowerCase())
   );
   const shareAmount = shareObj ? shareObj.amount : (voter?.amount || 0);
 
@@ -55,13 +57,13 @@ function SignVoteModalContent({
     e.preventDefault();
     setError('');
 
-    if (!voterAddress) {
+    if (!effectiveVoterAddress) {
       setError('Invalid voter account address.');
       return;
     }
 
     if (!isMyDevice) {
-      setError(`Device Security: This device can only sign consensus votes for its own user account (${myProfile.name}). Each device has only one user.`);
+      setError(`Device Security: This device can only sign consensus votes for its own user account (${myProfile?.name || 'User'}). Each device has only one user.`);
       return;
     }
 
@@ -79,7 +81,7 @@ function SignVoteModalContent({
       onConfirmVote({
         groupId: expense.groupId,
         expenseId: expense.id,
-        voterAddress: voterAddress,
+        voterAddress: effectiveVoterAddress,
         pin: pin.trim(),
         agreed,
         reason: reason.trim(),
@@ -172,7 +174,7 @@ function SignVoteModalContent({
               <input
                 type="text"
                 className="form-input"
-                placeholder="e.g. Incorrect share split, was not present, or already paid cash"
+                placeholder="e.g. Incorrect share split, amount discrepancy, or was not present"
                 value={reason}
                 onChange={e => setReason(e.target.value)}
                 required
@@ -207,16 +209,35 @@ function SignVoteModalContent({
             <div style={{ position: 'relative' }}>
               <Lock size={16} style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-dim)' }} />
               <input
-                type="password"
+                type={showPin ? "text" : "password"}
                 maxLength="6"
                 className="form-input mono"
-                style={{ paddingLeft: '38px', fontSize: '16px', letterSpacing: '0.2em' }}
-                placeholder="••••"
+                style={{ paddingLeft: '38px', paddingRight: '40px', fontSize: '16px', letterSpacing: showPin ? '0.1em' : '0.2em' }}
+                placeholder={showPin ? "1234" : "••••"}
                 value={pin}
                 onChange={e => setPin(e.target.value)}
                 required
                 autoFocus
               />
+              <button
+                type="button"
+                onClick={() => setShowPin(!showPin)}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '11px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-dim)',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                title={showPin ? "Hide PIN" : "Show PIN"}
+              >
+                {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
               Simulates Web3 wallet private key signature authorization.

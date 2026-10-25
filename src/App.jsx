@@ -165,9 +165,13 @@ export default function App() {
         setSyncStatus(data.status);
       } else if (data.type === 'EXPENSE_SUBMITTED_NOTIFICATION') {
         const exp = data.expense;
-        const myAddr = blockchainService.getCurrentAccount().toLowerCase();
+        const myAddr = (blockchainService.getCurrentAccount() || '').toLowerCase();
+        const myName = (blockchainService.getMyProfile()?.name || '').toLowerCase();
         const isPayer = (exp.payer || '').toLowerCase() === myAddr;
-        const myShare = exp.shares && exp.shares.find(s => (s.participant || '').toLowerCase() === myAddr);
+        const myShare = exp.shares && exp.shares.find(s => 
+          (s.participant || '').toLowerCase() === myAddr ||
+          (myName && s.name && s.name.toLowerCase() === myName)
+        );
 
         if (myShare && !isPayer) {
           setLiveVerificationNotice({
@@ -213,7 +217,7 @@ export default function App() {
           });
           addToast(
             'Payment Received!',
-            `${st.fromName} settled ${formatCents(st.amount)} to you via ${st.settlementType === 'UPI_DIRECT' ? 'Direct UPI' : 'FSINR Crypto'}!`,
+            `${st.fromName} settled ${formatCents(st.amount)} to you via On-Chain Smart Contract!`,
             'success'
           );
         } else if ((st.from || '').toLowerCase() !== myAddr) {
@@ -412,25 +416,6 @@ export default function App() {
     addToast('Instant Crypto Settlement', `Transferred ${formatCents(amount)} FSINR directly on-chain to ${toName}`, 'success');
   };
 
-  const handleRecordUpiSettlement = (to, toName, amount, utrNumber, upiId) => {
-    blockchainService.recordUpiSettlement(currentGroup.id, to, toName, amount, utrNumber, upiId);
-    addToast('UPI Settlement Anchored On-Chain', `Verified UPI payment of ${formatCents(amount)} to ${toName} (UTR: ${utrNumber}). Proof committed to ledger!`, 'success');
-  };
-
-  const handleRecordOffChain = (to, toName, amount, ref) => {
-    blockchainService.recordOffChainSettlement(currentGroup.id, to, toName, amount, ref);
-    addToast('Off-Chain Settlement Proposed', `Recorded payment of ${formatCents(amount)} to ${toName}. Awaiting confirmation.`, 'info');
-  };
-
-  const handleConfirmOffChain = (settlementId) => {
-    blockchainService.confirmOffChainSettlement(currentGroup.id, settlementId);
-    addToast('Payment Confirmed', 'Settlement finalized on-chain and debt balance zeroed.', 'success');
-  };
-
-  const handleDisputeOffChain = (settlementId, reason) => {
-    blockchainService.disputeOffChainSettlement(currentGroup.id, settlementId, reason);
-    addToast('Payment Disputed', 'Recipient marked external payment as unreceived.', 'error');
-  };
 
   const handleConfirmConsensusVote = ({ groupId, expenseId, voterAddress, pin, agreed, reason }) => {
     const exp = blockchainService.castConsensusVote({ groupId, expenseId, voterAddress, pin, agreed, reason });
@@ -478,7 +463,7 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  const pendingBlocksCount = (expenses || []).filter(e => e && e.groupId === currentGroup?.id && e.status === 0).length;
+  const pendingBlocksCount = (expenses || []).filter(e => e && currentGroup && String(e.groupId) === String(currentGroup.id) && Number(e.status) === 0).length;
 
   if (!currentUser) {
     return (
@@ -626,7 +611,7 @@ export default function App() {
             <Receipt size={16} />
             <span>Expenses</span>
             <span className="tab-badge">
-              {(expenses || []).filter(e => e && e.groupId === currentGroup?.id).length}
+              {(expenses || []).filter(e => e && currentGroup && String(e.groupId) === String(currentGroup.id)).length}
             </span>
           </button>
 
@@ -741,11 +726,6 @@ export default function App() {
             expenses={expenses}
             currentAccount={currentAccount}
             onSettleCrypto={handleSettleCrypto}
-            onRecordUpiSettlement={handleRecordUpiSettlement}
-            onRecordOffChain={handleRecordOffChain}
-            onConfirmOffChain={handleConfirmOffChain}
-            onDisputeOffChain={handleDisputeOffChain}
-            onUpdateMemberUpi={(memberAddress, upiId) => blockchainService.updateMemberUpi(currentGroup?.id || 1, memberAddress, upiId)}
           />
         )}
 

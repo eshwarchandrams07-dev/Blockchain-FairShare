@@ -7,7 +7,7 @@ import {
   Check, 
   RotateCcw 
 } from 'lucide-react';
-import { dollarsToCents, formatCents } from '../utils/cryptoUtils';
+import { dollarsToCents, formatCents, shortenAddress } from '../utils/cryptoUtils';
 import { SPLIT_TYPES } from '../services/blockchainState';
 
 export default function ExpenseCorrectModal({
@@ -38,10 +38,29 @@ function ExpenseCorrectModalContent({ onClose, expense, currentGroup, onConfirmC
 
   const verifiedMembers = (currentGroup?.members || []).filter(m => m && m.address);
 
-  // Initial participants
+  // Helper to resolve an address against current group members (handles address updates or name matches)
+  const resolveMemberAddress = (addr, nameHint = '') => {
+    if (!addr) return addr;
+    const directMatch = verifiedMembers.find(m => m.address && m.address.toLowerCase() === addr.toLowerCase());
+    if (directMatch) return directMatch.address;
+    if (nameHint) {
+      const nameMatch = verifiedMembers.find(m => m.name && m.name.toLowerCase() === nameHint.toLowerCase());
+      if (nameMatch) return nameMatch.address;
+    }
+    return addr;
+  };
+
+  // Initial participants normalized to active verified members
   const [selectedParticipants, setSelectedParticipants] = useState(() => {
     if (expense.shares && Array.isArray(expense.shares) && expense.shares.length > 0) {
-      return expense.shares.map(s => s.participant).filter(Boolean);
+      const resolved = expense.shares.map(s => resolveMemberAddress(s.participant, s.name)).filter(Boolean);
+      const unique = [];
+      for (const a of resolved) {
+        if (!unique.some(u => u.toLowerCase() === a.toLowerCase())) {
+          unique.push(a);
+        }
+      }
+      return unique;
     }
     return verifiedMembers.map(m => m.address).filter(Boolean);
   });
@@ -52,11 +71,12 @@ function ExpenseCorrectModalContent({ onClose, expense, currentGroup, onConfirmC
     const totalCents = expense.totalAmount || 1;
     if (expense.shares && Array.isArray(expense.shares)) {
       expense.shares.forEach(s => {
-        if (s.participant) {
+        const resolvedAddr = resolveMemberAddress(s.participant, s.name);
+        if (resolvedAddr) {
           const pct = s.percentage !== undefined 
             ? s.percentage 
             : ((s.amount / totalCents) * 100);
-          pcts[s.participant] = Number(pct).toFixed(1);
+          pcts[resolvedAddr] = Number(pct).toFixed(1);
         }
       });
     }
@@ -67,19 +87,21 @@ function ExpenseCorrectModalContent({ onClose, expense, currentGroup, onConfirmC
     const amts = {};
     if (expense.shares && Array.isArray(expense.shares)) {
       expense.shares.forEach(s => {
-        if (s.participant) {
-          amts[s.participant] = ((s.amount || 0) / 100).toFixed(2);
+        const resolvedAddr = resolveMemberAddress(s.participant, s.name);
+        if (resolvedAddr) {
+          amts[resolvedAddr] = ((s.amount || 0) / 100).toFixed(2);
         }
       });
     }
     return amts;
   });
 
-  // Toggle member inclusion in split
+  // Toggle member inclusion in split (case-insensitive)
   const toggleParticipant = (addr) => {
     if (!addr) return;
     setError('');
-    if (selectedParticipants.includes(addr)) {
+    const exists = selectedParticipants.some(a => a.toLowerCase() === addr.toLowerCase());
+    if (exists) {
       if (selectedParticipants.length <= 1) {
         setError('At least one participant must be included in the split.');
         return;
@@ -152,8 +174,8 @@ function ExpenseCorrectModalContent({ onClose, expense, currentGroup, onConfirmC
         const pct = rawPct / 100;
         let shareAmt = Math.round(totalCents * pct);
 
-        // Eliminate rounding discrepancy on last participant if sum equals 100%
-        if (idx === selectedParticipants.length - 1 && Math.abs(sumPct - 100) < 0.1) {
+        // Eliminate rounding discrepancy on last participant if sum equals ~100%
+        if (idx === selectedParticipants.length - 1 && Math.abs(sumPct - 100) < 0.15) {
           shareAmt = Math.max(0, totalCents - allocatedCents);
         } else {
           allocatedCents += shareAmt;
@@ -298,6 +320,17 @@ function ExpenseCorrectModalContent({ onClose, expense, currentGroup, onConfirmC
         </div>
 
         <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Expense Paid By</span>
+              <span style={{ fontSize: '11px', color: 'var(--color-primary-light)' }}>Original Payer Preserved</span>
+            </label>
+            <div style={{ padding: '8px 12px', background: 'var(--bg-surface-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13px' }}>💳 {expense.payerName || 'Member'}</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{shortenAddress(expense.payer)}</span>
+            </div>
+          </div>
+
           <div className="form-group">
             <label className="form-label">Corrected Title</label>
             <input

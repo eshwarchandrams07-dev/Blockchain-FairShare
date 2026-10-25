@@ -58,7 +58,7 @@ export default function AuditTrail({ auditLogs, currentGroup }) {
     );
   }
 
-  const groupLogs = (auditLogs || []).filter(l => l && currentGroup && l.groupId === currentGroup.id);
+  const groupLogs = (auditLogs || []).filter(l => l && currentGroup && String(l.groupId) === String(currentGroup.id));
 
   const handleVerifyLedgerChain = () => {
     if (!currentGroup?.id) return;
