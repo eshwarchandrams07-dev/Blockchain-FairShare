@@ -20,7 +20,7 @@ import {
   ArrowRightLeft,
   Database
 } from 'lucide-react';
-import { shortenAddress, formatMaskedCents } from '../utils/cryptoUtils';
+import { shortenAddress } from '../utils/cryptoUtils';
 import { blockchainService } from '../services/blockchainState';
 
 export default function Navbar({ 
@@ -756,13 +756,15 @@ export default function Navbar({
                     </div>
                   </div>
 
-                  {/* Token Balance */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748b' }}>Balance:</span>
-                    <span style={{ fontWeight: 800, color: '#059669' }}>
-                      {formatMaskedCents(activePersona?.tokenBalance || 0, isPrivacyMaskActive)} FSINR
-                    </span>
-                  </div>
+                  {/* UPI VPA for Real-Life Payments */}
+                  {activePersona?.upiId && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#64748b' }}>UPI VPA:</span>
+                      <span className="mono" style={{ fontWeight: 700, color: 'var(--color-primary-light)', fontSize: '11px' }}>
+                        {activePersona.upiId}
+                      </span>
+                    </div>
+                  )}
 
                   {/* PIN */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

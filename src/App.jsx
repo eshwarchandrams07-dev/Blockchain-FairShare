@@ -253,7 +253,6 @@ export default function App() {
   const currentGroup = blockchainService.getCurrentGroup() || { id: 1, name: 'Public Ledger', members: [] };
   const expenses = blockchainService.expenses || [];
   const auditLogs = blockchainService.getAuditLogs(currentGroup?.id || 1) || [];
-  const settlements = blockchainService.settlements || [];
   const activePersona = blockchainService.getActivePersona() || {};
   const groupBalances = blockchainService.calculateGroupBalances(currentGroup?.id || 1) || [];
   const myProfile = blockchainService.getMyProfile() || {};
@@ -409,11 +408,6 @@ export default function App() {
   const handleConfirmCorrection = (groupId, oldExpId, newExpenseData, reason) => {
     const newExp = blockchainService.correctExpense(groupId, oldExpId, newExpenseData, reason);
     addToast('Immutable Correction Linked', `Created Expense #${newExp.id} linking to previous #${oldExpId}`, 'success');
-  };
-
-  const handleSettleCrypto = (to, toName, amount) => {
-    blockchainService.settleDebtCrypto(currentGroup.id, to, toName, amount);
-    addToast('Instant Crypto Settlement', `Transferred ${formatCents(amount)} FSINR directly on-chain to ${toName}`, 'success');
   };
 
 
@@ -639,7 +633,7 @@ export default function App() {
             onClick={() => setActiveTab('settlements')}
           >
             <ArrowRightLeft size={16} />
-            <span>Settlement Engine</span>
+            <span>Who Owes Whom</span>
           </button>
 
           <button
@@ -722,10 +716,8 @@ export default function App() {
           <SettlementHub
             currentGroup={currentGroup}
             groupBalances={groupBalances}
-            settlements={settlements}
             expenses={expenses}
             currentAccount={currentAccount}
-            onSettleCrypto={handleSettleCrypto}
           />
         )}
 
